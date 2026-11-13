@@ -18,6 +18,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const CAVALRY_PORT = Number(process.env.CAVALRY_MCP_PORT || 6768);
 const LOCAL_PORT = Number(process.env.BRIDGE_PORT || 6769);
@@ -42,7 +43,9 @@ function fingerprintFor(name) {
 }
 const CLIENT_NAME = process.env.CAVALRY_MCP_CLIENT_NAME || 'DSH (DeepSeek Harness)';
 const CLIENT_VERSION = '0.1.0';
-const LOG = process.env.BRIDGE_LOG || 'E:\\dsh work\\dsh_cavalry\\cavalry_bridge.log';
+// 日志写在脚本旁边，别用绝对路径（换机器就废了）
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const LOG = process.env.BRIDGE_LOG || path.join(HERE, 'cavalry_bridge.log');
 
 const state = {
   connected: false,
