@@ -1279,6 +1279,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         g_dragging = false;
         ReleaseCapture();
         return 0;
+    case WM_ACTIVATE:
+        if (LOWORD(wp) == WA_INACTIVE && !g_inMenu && !g_resizing && !g_thumbDrag) {
+            ShowWindow(hwnd, SW_HIDE);   // 点到热盒外面 → 收起（不重置搜索状态）
+        }
+        return 0;
     case WM_SETCURSOR: {
         POINT cp; GetCursorPos(&cp); ScreenToClient(hwnd, &cp);
         RECT pc = PanelRect();
