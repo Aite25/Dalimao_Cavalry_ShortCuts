@@ -825,10 +825,10 @@ static void DrawResults(HDC dc) {
         HFONT f = MakeFont(15);
         HGDIOBJ of = SelectObject(dc, f);
         RECT tr = r; tr.left += 34; tr.right -= 90;
-        if (i < 6) {
+        if (row < 6) {   // 只给当前可见的前 6 行编号
             SetTextColor(dc, RGB(120, 120, 128));
             RECT nr = r; nr.left += 12; nr.right = nr.left + 20;
-            std::wstring num = std::to_wstring(i + 1);
+            std::wstring num = std::to_wstring(row + 1);
             DrawTextW(dc, num.c_str(), -1, &nr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
             SetTextColor(dc, kText);
         }
@@ -1472,7 +1472,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_mode == M_SEARCH) {
             bool c = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
             bool s = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-            if (c && wp >= '1' && wp <= '6') { g_sel = (int)(wp - '1'); ExecSelected(); return 0; }
+            if (c && wp >= '1' && wp <= '6') { g_sel = g_scroll + (int)(wp - '1'); ExecSelected(); return 0; }
             if (wp == VK_TAB) { g_tab = (g_tab + (s ? kTabCount - 1 : 1)) % kTabCount; g_sel = 0; g_scroll = 0; UpdateResults(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         }
         if (g_mode == M_SEARCH && (GetKeyState(VK_CONTROL) & 0x8000) && (wp == 'A')) {
@@ -1526,7 +1526,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     case WM_APP + 5:
         if (g_mode == M_SEARCH && wp >= 1 && wp <= 6) {
-            g_sel = (int)wp - 1;
+            g_sel = g_scroll + (int)wp - 1;
             ExecSelected();
         }
         return 0;
