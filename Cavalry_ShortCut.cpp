@@ -1388,7 +1388,7 @@ static void ForceForeground(HWND hwnd) {
 
 static void ShowAtCursor(HWND hwnd) {
     g_mode = M_PIE;
-    g_mod = 0; LoadActive();   // 每次呼出都从"无"开始
+    g_box = 0; g_mod = 0; LoadActive();   // 每次呼出都从"热盒1 · 无"开始
     g_ctrlUsed = true;   // 呼出用的 Ctrl 不算"单独按 Ctrl"，避免一开就切到 Ctrl 版
     g_query.clear();
     g_sel = 0;
