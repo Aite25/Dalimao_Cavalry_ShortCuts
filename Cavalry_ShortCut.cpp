@@ -1866,7 +1866,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         ShowAtCursor(hwnd);
         return 0;
     case WM_HOTKEY:
-        if (wp == HOTKEY_TOGGLE) ToggleWindow(g_main ? g_main : hwnd);
+        if (wp == HOTKEY_TOGGLE) {
+            HWND target = g_main ? g_main : hwnd;
+            if (IsWindowVisible(target) && g_mode == M_PIE && g_hotkeyVk == '1') {
+                SwitchSet(0, g_mod);   // 热盒已开：Ctrl+1 = 切到热盒 1（不关闭）
+                InvalidateRect(target, nullptr, TRUE);
+            } else {
+                ToggleWindow(target);
+            }
+        }
         return 0;
     case WM_COMMAND: {
         if (LOWORD(wp) == ID_EDIT && HIWORD(wp) == EN_CHANGE) {
