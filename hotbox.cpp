@@ -1286,6 +1286,20 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         break;
     }
     case WM_MOUSEMOVE: {
+        if (g_resizing) {
+            POINT rp; GetCursorPos(&rp);
+            int nw = g_winW, nh = g_winH;
+            if (g_resizeEdges & 1) nw = g_resizeStartW + (rp.x - g_resizeStart.x);
+            if (g_resizeEdges & 2) nh = g_resizeStartH + (rp.y - g_resizeStart.y);
+            if (nw < 480) nw = 480;
+            if (nh < 380) nh = 380;
+            g_winW = nw; g_winH = nh;
+            SetWindowPos(hwnd, HWND_TOP, 0, 0, nw, nh, SWP_NOMOVE | SWP_NOZORDER);
+            SyncEditFromMode();
+            UpdateScrollInfo();
+            InvalidateRect(hwnd, nullptr, TRUE);
+            return 0;
+        }
         if (g_mode == M_SEARCH) {
             POINT mp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
             int hr = -1;
