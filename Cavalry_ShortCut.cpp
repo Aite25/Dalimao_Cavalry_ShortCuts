@@ -90,6 +90,7 @@ struct Item {
     std::wstring cat;      // 脚本 / 形状 / 行为 / 工具 / 效果
 };
 static Item g_bindItem;            // 待绑定的搜索项
+static std::vector<std::wstring> g_pinned;   // 置顶项 key = kind + "|" + value
 static std::vector<Item> g_index;      // 搜索结果来源
 
 enum Mode { M_PIE, M_SEARCH, M_SETTINGS };
@@ -709,6 +710,17 @@ static void UpdateResults() {
         if (!MatchScore(it.name, g_query)) continue;
         g_results.push_back(it);
         if (g_results.size() >= 400) break;
+    }
+    if (!g_pinned.empty()) {
+        std::vector<Item> pref, rest;
+        for (auto& it : g_results) {
+            std::wstring key = it.kind + L"|" + it.value;
+            bool pin = false;
+            for (auto& k : g_pinned) if (k == key) { pin = true; break; }
+            if (pin) pref.push_back(it); else rest.push_back(it);
+        }
+        g_results = pref;
+        for (auto& it : rest) g_results.push_back(it);
     }
     if (g_sel >= (int)g_results.size()) g_sel = 0;
 }
@@ -1630,10 +1642,28 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 g_sel = idx2;
                 HMENU hm = CreatePopupMenu();
                 AppendMenuW(hm, MF_STRING, 1001, L"绑定到热盒…");
+                std::wstring pinKey = g_results[idx2].kind + L"|" + g_results[idx2].value;
+                bool isPinned = false;
+                for (auto& k : g_pinned) if (k == pinKey) { isPinned = true; break; }
+                AppendMenuW(hm, MF_STRING, 1002, isPinned ? L"取消置顶" : L"置顶");
                 POINT sp; GetCursorPos(&sp);
                 SetForegroundWindow(hwnd);
                 int cmd = (int)TrackPopupMenu(hm, TPM_RETURNCMD | TPM_RIGHTBUTTON, sp.x, sp.y, 0, hwnd, nullptr);
                 DestroyMenu(hm);
+                if (cmd == 1002) {
+                    std::wstring pk = g_results[idx2].kind + L"|" + g_results[idx2].value;
+                    bool found = false;
+                    for (size_t q = 0; q < g_pinned.size(); ++q) if (g_pinned[q] == pk) { g_pinned.erase(g_pinned.begin() + q); found = true; break; }
+                    if (!found) g_pinned.push_back(pk);
+                    {
+                        std::string raw;
+                        for (auto& k : g_pinned) raw += Narrow(k) + "\n";
+                        WriteFileUtf8(ExeDir() + L"\\Cavalry_ShortCut_pinned.txt", raw);
+                    }
+                    UpdateResults();
+                    InvalidateRect(hwnd, nullptr, TRUE);
+                    return 0;
+                }
                 if (cmd == 1001) {
                     g_bindItem = g_results[idx2];
                     g_binding = true;
@@ -2029,6 +2059,18 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     InitIcons();
     LoadConfig();
     LoadIndex();
+    {
+        std::string raw = ReadFileUtf8(ExeDir() + L"\\Cavalry_ShortCut_pinned.txt");
+        size_t st = 0;
+        while (st < raw.size()) {
+            size_t en = raw.find('\\n', st);
+            if (en == std::string::npos) en = raw.size();
+            std::string line = raw.substr(st, en - st);
+            if (!line.empty() && line.back() == '\\r') line.pop_back();
+            if (!line.empty()) g_pinned.push_back(Widen(line));
+            st = en + 1;
+        }
+    }
     LoadSectors();
 
     HWND msgWnd = CreateWindowExW(0, L"CavalryShortCut", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, inst, nullptr);
