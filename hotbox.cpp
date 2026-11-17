@@ -944,14 +944,14 @@ static void DrawTopIcons(HDC dc) {
     HGDIOBJ ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
 
     // 文件夹
-    RECT fr = IconRect(0);
+    RECT fr = IconRect(1);   // 文件夹在左
     RECT body = { fr.left + 2, fr.top + 8, fr.right - 2, fr.bottom - 4 };
     RoundRect(dc, body.left, body.top, body.right, body.bottom, 4, 4);
     RECT tabr = { fr.left + 4, fr.top + 3, fr.left + 14, fr.top + 9 };
     RoundRect(dc, tabr.left, tabr.top, tabr.right, tabr.bottom, 3, 3);
 
     // 齿轮
-    RECT gr = IconRect(1);
+    RECT gr = IconRect(0);   // 设置在右
     int cx = (gr.left + gr.right) / 2, cy = (gr.top + gr.bottom) / 2;
     int r1 = 9, r2 = 5;
     Ellipse(dc, cx - r1, cy - r1, cx + r1, cy + r1);
@@ -1348,6 +1348,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         break;
     case WM_KEYDOWN: {
+        if (g_mode == M_SEARCH) {
+            bool c = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+            bool s = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+            if (c && wp >= '1' && wp <= '6') { g_sel = (int)(wp - '1'); ExecSelected(); return 0; }
+            if (wp == VK_TAB) { g_tab = (g_tab + (s ? kTabCount - 1 : 1)) % kTabCount; g_sel = 0; g_scroll = 0; UpdateResults(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+        }
         if (g_mode == M_SEARCH && (GetKeyState(VK_CONTROL) & 0x8000) && (wp == 'A')) {
             if (g_edit) { SetFocus(g_edit); SendMessageW(g_edit, EM_SETSEL, (WPARAM)0, (LPARAM)-1); }
             return 0;   // 吞掉，避免系统提示音
