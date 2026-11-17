@@ -817,7 +817,15 @@ static void DrawResults(HDC dc) {
         RECT r = RowRect(row);
         bool sel = (i == g_sel);
         bool hov = (i == g_hoverRow);
-        FillRound(dc, r, 6, hov ? RGB(58, 110, 168) : (sel ? RGB(70, 70, 74) : RGB(38, 38, 40)), hov ? RGB(58, 110, 168) : (sel ? RGB(70, 70, 74) : RGB(50, 50, 54)));
+        // 只画描边，不填充：hover=蓝框，选中=浅灰框，其余=暗淡框
+        {
+            COLORREF bc = hov ? RGB(58, 110, 168) : (sel ? RGB(120, 120, 128) : RGB(56, 56, 60));
+            HPEN bp = CreatePen(PS_SOLID, 1, bc);
+            HGDIOBJ ob = SelectObject(dc, bp), obb = SelectObject(dc, GetStockObject(NULL_BRUSH));
+            Rectangle(dc, r.left, r.top, r.right, r.bottom);
+            SelectObject(dc, obb); SelectObject(dc, ob);
+            DeleteObject(bp);
+        }
         if (sel) { RECT bar = { r.left, r.top, r.left + 4, r.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
 
         SetBkMode(dc, TRANSPARENT);
@@ -938,7 +946,15 @@ static void DrawSettings(HDC dc) {
         RECT r = SettingRowRect(i);
         bool sel = (i == g_sel);
         bool hov = (i == g_hoverRow);
-        FillRound(dc, r, 6, hov ? RGB(58, 110, 168) : (sel ? RGB(70, 70, 74) : RGB(38, 38, 40)), hov ? RGB(58, 110, 168) : (sel ? RGB(70, 70, 74) : RGB(50, 50, 54)));
+        // 只画描边，不填充：hover=蓝框，选中=浅灰框，其余=暗淡框
+        {
+            COLORREF bc = hov ? RGB(58, 110, 168) : (sel ? RGB(120, 120, 128) : RGB(56, 56, 60));
+            HPEN bp = CreatePen(PS_SOLID, 1, bc);
+            HGDIOBJ ob = SelectObject(dc, bp), obb = SelectObject(dc, GetStockObject(NULL_BRUSH));
+            Rectangle(dc, r.left, r.top, r.right, r.bottom);
+            SelectObject(dc, obb); SelectObject(dc, ob);
+            DeleteObject(bp);
+        }
         if (sel) { RECT bar = { r.left, r.top, r.left + 4, r.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
 
         SetBkMode(dc, TRANSPARENT);
