@@ -1437,12 +1437,16 @@ static bool AnyCavalryVisible() {
 static void TickCavalryState(HWND hotbox) {
     if (!g_cavalryWnd || !IsWindow(g_cavalryWnd)) g_cavalryWnd = nullptr;
     bool alive = g_cavalryWnd ? true : AnyCavalryVisible();
-    if (!alive) {
-        if (IsWindowVisible(hotbox)) ShowWindow(hotbox, SW_HIDE);
-        return;
-    }
-    if (g_cavalryWnd && (IsIconic(g_cavalryWnd) || !IsWindowVisible(g_cavalryWnd))) {
-        if (IsWindowVisible(hotbox)) ShowWindow(hotbox, SW_HIDE);
+    bool hideNow = false;
+    if (!alive) hideNow = true;
+    else if (g_cavalryWnd && (IsIconic(g_cavalryWnd) || !IsWindowVisible(g_cavalryWnd))) hideNow = true;
+    if (hideNow && IsWindowVisible(hotbox)) {
+        // 直接关闭：不保留状态，下次呼出重新开始（不退出进程）
+        g_binding = false;
+        g_mode = M_PIE;
+        g_hover = -1;
+        SyncEditFromMode();
+        ShowWindow(hotbox, SW_HIDE);
     }
 }
 
