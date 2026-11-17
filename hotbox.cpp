@@ -839,7 +839,7 @@ static void DrawResults(HDC dc) {
         HGDIOBJ of = SelectObject(dc, f);
         RECT tr = r; tr.left += 34; tr.right -= 90;
         if (row < 6) {   // 只给当前可见的前 6 行编号
-            SetTextColor(dc, RGB(120, 120, 128));
+            SetTextColor(dc, hov ? RGB(225, 232, 245) : (sel ? RGB(200, 200, 210) : RGB(120, 120, 128)));
             RECT nr = r; nr.left += 12; nr.right = nr.left + 20;
             std::wstring num = std::to_wstring(row + 1);
             DrawTextW(dc, num.c_str(), -1, &nr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
