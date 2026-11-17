@@ -1,4 +1,4 @@
-﻿# Cavalry ShortyCut（径向热盒）
+﻿# Cavalry ShortCut（径向热盒）
 
 参考 AE 插件 `DalimaoShortcuts` 的热盒：**8 方向扇区 + 中心圆**，在鼠标位置弹出，点扇区执行脚本。
 
@@ -14,7 +14,7 @@
 
 | 操作 | 效果 |
 |---|---|
-| `Alt+Q` | 在鼠标位置弹出 / 再按收起（可在 `Cavalry_ShortyCut.ini` 改） |
+| `Alt+Q` | 在鼠标位置弹出 / 再按收起（可在 `Cavalry_ShortCut.ini` 改） |
 | 鼠标移出中心圆 | 对应扇区高亮，中心画蓝色弧线指向它 |
 | 左键点扇区 | 执行该扇区的脚本，然后自动收起 |
 | `1` ~ `8` | 直接执行第 N 个扇区 |
@@ -48,13 +48,13 @@
 ## 弹窗方式
 
 ```
-Cavalry_ShortyCut.exe            # 常驻（Alt+Shift+A 呼出）
-Cavalry_ShortyCut.exe --show     # 让已在运行的实例在鼠标位置弹出（给 Cavalry 脚本用）
+Cavalry_ShortCut.exe            # 常驻（Alt+Shift+A 呼出）
+Cavalry_ShortCut.exe --show     # 让已在运行的实例在鼠标位置弹出（给 Cavalry 脚本用）
 ```
 
-Cavalry 里的桥接脚本 `Cavalry ShortyCut Show.js` 就是调用 `--show`，可以绑到 Cavalry 自己的快捷键上。
+Cavalry 里的桥接脚本 `Cavalry ShortCut Show.js` 就是调用 `--show`，可以绑到 Cavalry 自己的快捷键上。
 
-## 配置 `Cavalry_ShortyCut.ini`
+## 配置 `Cavalry_ShortCut.ini`
 
 ```ini
 hotkey=Shift+A
@@ -102,7 +102,7 @@ hotkey=Shift+A
 | `↑` `↓` | 移动 |
 | `Esc` | 返回圆盘 |
 
-绑定保存在 `Cavalry_ShortyCut.json`：
+绑定保存在 `Cavalry_ShortCut.json`：
 
 ```json
 {
