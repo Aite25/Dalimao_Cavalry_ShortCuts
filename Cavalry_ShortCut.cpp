@@ -79,7 +79,8 @@ static Slot g_slots[8];          // 当前激活的一组
 static Slot g_store[16][8];      // [box*4+mod][slot]
 static int  g_box = 0;           // 0..3（热盒 1..4）
 static int  g_mod = 0;
-static bool g_ctrlUsed = false;   // Ctrl 是否被当作组合键使用           // 0=无 1=Ctrl 2=Shift 3=Alt
+static bool g_ctrlUsed = false;   // Ctrl 是否被当作组合键使用
+static bool g_binding = false;
 
 
 struct Item {
@@ -88,6 +89,7 @@ struct Item {
     std::wstring value;
     std::wstring cat;      // 脚本 / 形状 / 行为 / 工具 / 效果
 };
+static Item g_bindItem;            // 待绑定的搜索项
 static std::vector<Item> g_index;      // 搜索结果来源
 
 enum Mode { M_PIE, M_SEARCH, M_SETTINGS };
@@ -1218,6 +1220,18 @@ static void Paint(HWND hwnd) {
     }
 
     if (g_mode == M_PIE) DrawPieTabs(mem);
+    if (g_binding) {
+        std::wstring hint = L"绑定：" + g_bindItem.name + L"  →  点击扇区完成 · Esc 取消";
+        SetBkMode(mem, TRANSPARENT);
+        SetTextColor(mem, RGB(255, 210, 120));
+        HFONT hf = MakeFont(15);
+        HGDIOBJ ho = SelectObject(mem, hf);
+        RECT hr = { 0, 92, g_winW, 118 };
+        SetMapMode(mem, MM_TEXT); SetViewportOrgEx(mem, 0, 0, nullptr); SetTextAlign(mem, TA_LEFT | TA_TOP);
+        DrawTextW(mem, hint.c_str(), -1, &hr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(mem, ho);
+        DeleteObject(hf);
+    }
     if (g_mode != M_SETTINGS) DrawTopIcons(mem);   // 设置页右上角是关闭按钮
     if (g_mode != M_PIE) {   // 仅搜索/设置页显示拖拽条
         RECT pr = PanelRect();
@@ -1606,11 +1620,35 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         return 0;
     }
-    case WM_RBUTTONUP:
+    case WM_RBUTTONUP: {
+        POINT rp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+        if (g_mode == M_SEARCH) {
+            RECT fr = RowRect(0);
+            int rowHit = (rp.y - fr.top) / 26;
+            int idx2 = g_scroll + rowHit;
+            if (rp.x >= fr.left && rp.x < fr.right && rowHit >= 0 && rowHit < VisibleRows() && idx2 >= 0 && idx2 < (int)g_results.size()) {
+                g_sel = idx2;
+                HMENU hm = CreatePopupMenu();
+                AppendMenuW(hm, MF_STRING, 1001, L"绑定到热盒…");
+                POINT sp; GetCursorPos(&sp);
+                SetForegroundWindow(hwnd);
+                int cmd = (int)TrackPopupMenu(hm, TPM_RETURNCMD | TPM_RIGHTBUTTON, sp.x, sp.y, 0, hwnd, nullptr);
+                DestroyMenu(hm);
+                if (cmd == 1001) {
+                    g_bindItem = g_results[idx2];
+                    g_binding = true;
+                    ShowAtCursor(hwnd);
+                    InvalidateRect(hwnd, nullptr, TRUE);
+                    return 0;
+                }
+                return 0;
+            }
+        }
         ShowWindow(hwnd, SW_HIDE);
         g_mode = M_PIE;
         SyncEditFromMode();
         return 0;
+    }
     case WM_LBUTTONDOWN: {
         {
             int ex = (int)GET_X_LPARAM(lp), ey = (int)GET_Y_LPARAM(lp);
@@ -1695,6 +1733,20 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         if (g_mode == M_PIE) {
             int h = HitTestPie(p);
+            if (g_binding) {
+                if (h >= 0) {
+                    g_slots[h].name = g_bindItem.name;
+                    g_slots[h].kind = g_bindItem.kind;
+                    g_slots[h].value = g_bindItem.value;
+                    g_slots[h].key = std::to_wstring(h + 1);
+                    g_slots[h].used = true;
+                    SaveSectors();
+                    Log("bound to sector " + std::to_string(h));
+                }
+                g_binding = false;
+                ShowWindow(hwnd, SW_HIDE);
+                return 0;
+            }
             if (h == -2) { ShowWindow(hwnd, SW_HIDE); return 0; }
             if (h >= 0 && g_slots[h].used) {
                 Item it{ g_slots[h].name, g_slots[h].kind, g_slots[h].value };
@@ -1831,6 +1883,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (wp == VK_MENU)    { SwitchSet(g_box, (g_mod == 3) ? 0 : 3); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         }
         if (wp == VK_ESCAPE) {
+            if (g_binding) { g_binding = false; ShowWindow(hwnd, SW_HIDE); return 0; }
             if (g_mode == M_SEARCH && g_bindSlot >= 0) { g_mode = M_SETTINGS; g_bindSlot = -1; }
             else if (g_mode != M_PIE) { g_mode = M_PIE; }
             else ShowWindow(hwnd, SW_HIDE);
