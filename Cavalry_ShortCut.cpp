@@ -1201,7 +1201,6 @@ static HHOOK g_mouseHook = nullptr;
 static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     static bool swallowUp = false;
     if (nCode == HC_ACTION && wParam == WM_RBUTTONDOWN && g_main && IsWindowVisible(g_main) && g_mode == M_PIE) {
-        Log(std::string("rbutton in hook, visible=") + (IsWindowVisible(g_main) ? "1" : "0") + " mode=" + std::to_string((int)g_mode));
         swallowUp = true;
         PostMessageW(g_main, WM_APP + 8, 0, 0);
         return 1;
@@ -1788,9 +1787,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     Log("hotkey " + Narrow(g_hotkeySpec) + " -> " + (hk ? "ok" : ("FAIL err=" + std::to_string(GetLastError()))));
 
     SetTimer(hwnd, 1, 25, nullptr);
-    // 钩子实测在受限环境下收不到事件，停用；右键取消改由轮询处理
-    g_mouseHook = nullptr;
-    Log(std::string("mouse hook: ") + (g_mouseHook ? "ok" : ("FAIL err=" + std::to_string(GetLastError()))));
 
     WNDCLASSW cc = {};
     cc.lpfnWndProc = CatcherProc;
