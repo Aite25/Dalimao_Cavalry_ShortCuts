@@ -1,4 +1,4 @@
-﻿# Cavalry Hotbox（径向热盒）
+﻿# Cavalry ShortyCut（径向热盒）
 
 参考 AE 插件 `DalimaoShortcuts` 的热盒：**8 方向扇区 + 中心圆**，在鼠标位置弹出，点扇区执行脚本。
 
@@ -52,7 +52,7 @@ Cavalry_ShortyCut.exe            # 常驻（Alt+Shift+A 呼出）
 Cavalry_ShortyCut.exe --show     # 让已在运行的实例在鼠标位置弹出（给 Cavalry 脚本用）
 ```
 
-Cavalry 里的桥接脚本 `Hotbox Show.js` 就是调用 `--show`，可以绑到 Cavalry 自己的快捷键上。
+Cavalry 里的桥接脚本 `Cavalry ShortyCut Show.js` 就是调用 `--show`，可以绑到 Cavalry 自己的快捷键上。
 
 ## 配置 `Cavalry_ShortyCut.ini`
 
