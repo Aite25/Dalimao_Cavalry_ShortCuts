@@ -631,7 +631,7 @@ static void LoadSectors() {
         g_store[i / 8][i % 8] = s;
     }
     if (total == 8) {   // 旧格式：复制到其余 15 组
-        for (int b = 1; b < 16; ++b) for (int i = 0; i < 8; ++i) g_store[b][i] = g_store[0][i];
+        /* 各组独立：不复制默认绑定 */
     }
 
     if (total == 0) {   // 空配置：用 actions 目录生成默认绑定
@@ -655,7 +655,7 @@ static void LoadSectors() {
             g_store[0][i].key = std::to_wstring(i + 1);
             g_store[0][i].used = true;
         }
-        for (int b = 1; b < 16; ++b) for (int i = 0; i < 8; ++i) g_store[b][i] = g_store[0][i];
+        /* 各组独立：不复制默认绑定 */
         SaveSectors();
     }
     LoadActive();
