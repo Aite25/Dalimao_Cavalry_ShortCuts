@@ -1502,14 +1502,20 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_resizing) { g_resizing = false; ReleaseCapture(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
 
-        // 图标点击：按 pill 的左右半区判定，命中范围更大
+        // 图标点击：两个独立命中框（左=文件夹，右=设置）
         {
-            RECT a = IconRect(1), b2 = IconRect(0);
-            RECT pill = { b2.right - 110, a.top - 14, b2.right + 10, b2.bottom + 14 };   // 图标区放大，避免误落到扇区判定
-            if (p.x >= pill.left && p.x < pill.right && p.y >= pill.top && p.y < pill.bottom) {
-                int mid = (pill.left + pill.right) / 2;
-                if (p.x < mid) ShellExecuteW(nullptr, L"open", L"C:\\Windows\\explorer.exe", (L"\"" + ExeDir() + L"\\actions\"").c_str(), nullptr, SW_SHOWNORMAL);
-                else { g_mode = M_SETTINGS; g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); }
+            RECT gear = IconRect(0);
+            RECT fold = IconRect(1);
+            InflateRect(&gear, 10, 14);
+            InflateRect(&fold, 10, 14);
+            if (p.x >= gear.left && p.x < gear.right && p.y >= gear.top && p.y < gear.bottom) {
+                g_mode = M_SETTINGS;
+                g_sel = 0;
+                InvalidateRect(hwnd, nullptr, TRUE);
+                return 0;
+            }
+            if (p.x >= fold.left && p.x < fold.right && p.y >= fold.top && p.y < fold.bottom) {
+                ShellExecuteW(nullptr, L"open", L"C:\\Windows\\explorer.exe", (L"\"" + ExeDir() + L"\\actions\"").c_str(), nullptr, SW_SHOWNORMAL);
                 return 0;
             }
         }
