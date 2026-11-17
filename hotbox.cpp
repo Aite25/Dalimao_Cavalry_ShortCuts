@@ -109,6 +109,10 @@ static int g_scroll = 0;
 static int g_hoverRow = -1;
 static int g_maxScroll = 0;
 static bool g_thumbDrag = false;
+static bool g_resizing = false;
+static int g_resizeEdges = 0;   // 1=右边 2=下边 3=右下
+static POINT g_resizeStart = {0,0};
+static int g_resizeStartW = 0, g_resizeStartH = 0;
 static int g_dragStartY = 0;
 static int g_dragStartScroll = 0;
 static bool g_hoverFolder = false;
@@ -598,6 +602,16 @@ static RECT PanelRect() {
     return r;
 }
 
+static RECT RowRect(int i);
+
+static int VisibleRows() {
+    int h = PanelRect().bottom - (RowRect(0).top);
+    int n = h / 38;
+    if (n < 3) n = 3;
+    if (n > 12) n = 12;
+    return n;
+}
+
 static RECT RowRect(int i) {
     RECT p = PanelRect();
     RECT r;
@@ -632,7 +646,7 @@ static RECT IconRect(int i) {   // 0=文件夹 1=齿轮
 static void UpdateScrollInfo() {
     if (!g_scrollbar) return;
     int total = (int)g_results.size();
-    int page = 7;
+    int page = VisibleRows();
     int maxScroll = total > page ? total - page : 0;
     if (g_scroll > maxScroll) g_scroll = maxScroll;
     if (g_scroll < 0) g_scroll = 0;
@@ -765,7 +779,7 @@ static RECT ScrollTrackRect() {
     RECT p = PanelRect();
     RECT r;
     RECT r0 = RowRect(0);
-    RECT r6 = RowRect(6);
+    RECT r6 = RowRect(VisibleRows() - 1);
     r.right = r0.right + 10;
     r.left = r.right - 6;
     r.top = r0.top + 6;
@@ -776,9 +790,9 @@ static RECT ScrollTrackRect() {
 static RECT ScrollThumbRect() {
     RECT t = ScrollTrackRect();
     int total = (int)g_results.size();
-    if (total <= 7) return RECT{0,0,0,0};
+    if (total <= VisibleRows()) return RECT{0,0,0,0};
     int trackH = t.bottom - t.top;
-    int thumbH = (int)((double)trackH * 7 / total);
+    int thumbH = (int)((double)trackH * VisibleRows() / total);
     if (thumbH < 26) thumbH = 26;
     int maxScroll = g_maxScroll > 0 ? g_maxScroll : 1;
     int y = t.top + (int)((double)(trackH - thumbH) * g_scroll / maxScroll);
@@ -788,7 +802,7 @@ static RECT ScrollThumbRect() {
 
 static void DrawScrollBar(HDC dc) {
     if (g_mode != M_SEARCH) return;
-    if ((int)g_results.size() <= 7) return;
+    if ((int)g_results.size() <= VisibleRows()) return;
 
     RECT t = ScrollTrackRect();
     FillRound(dc, t, 3, RGB(44, 44, 47), RGB(44, 44, 47));
@@ -797,13 +811,14 @@ static void DrawScrollBar(HDC dc) {
 }
 
 static void DrawResults(HDC dc) {
-    for (int row = 0; row < 7; ++row) {
+    for (int row = 0; row < VisibleRows(); ++row) {
         int i = g_scroll + row;
         if (i >= (int)g_results.size()) break;
         RECT r = RowRect(row);
         bool sel = (i == g_sel);
         bool hov = (i == g_hoverRow);
-        FillRound(dc, r, 6, sel ? kRowSel : (hov ? RGB(45, 72, 105) : RGB(38, 38, 40)), sel ? kRowSel : (hov ? RGB(45, 72, 105) : RGB(50, 50, 54)));
+        FillRound(dc, r, 6, sel ? RGB(70, 70, 74) : (hov ? RGB(58, 110, 168) : RGB(38, 38, 40)), sel ? RGB(70, 70, 74) : (hov ? RGB(58, 110, 168) : RGB(50, 50, 54)));
+        if (sel) { RECT bar = { r.left, r.top, r.left + 4, r.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
 
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, kText);
@@ -923,7 +938,8 @@ static void DrawSettings(HDC dc) {
         RECT r = SettingRowRect(i);
         bool sel = (i == g_sel);
         bool hov = (i == g_hoverRow);
-        FillRound(dc, r, 6, sel ? kRowSel : (hov ? RGB(45, 72, 105) : RGB(38, 38, 40)), sel ? kRowSel : (hov ? RGB(45, 72, 105) : RGB(50, 50, 54)));
+        FillRound(dc, r, 6, sel ? RGB(70, 70, 74) : (hov ? RGB(58, 110, 168) : RGB(38, 38, 40)), sel ? RGB(70, 70, 74) : (hov ? RGB(58, 110, 168) : RGB(50, 50, 54)));
+        if (sel) { RECT bar = { r.left, r.top, r.left + 4, r.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
 
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, kText);
@@ -1022,7 +1038,7 @@ static void Paint(HWND hwnd) {
         DrawSettings(mem);
     }
 
-    DrawTopIcons(mem);
+    if (g_mode != M_SETTINGS) DrawTopIcons(mem);   // 设置页右上角是关闭按钮
 
     BitBlt(dc, 0, 0, g_winW, g_winH, mem, 0, 0, SRCCOPY);
     SelectObject(mem, old);
@@ -1259,6 +1275,21 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SyncEditFromMode();
         return 0;
     case WM_LBUTTONDOWN: {
+        {
+            int ex = (int)GET_X_LPARAM(lp), ey = (int)GET_Y_LPARAM(lp);
+            int edges = 0;
+            if (ex >= g_winW - 10) edges |= 1;
+            if (ey >= g_winH - 10) edges |= 2;
+            if (edges) {
+                g_resizing = true;
+                g_resizeEdges = edges;
+                GetCursorPos(&g_resizeStart);
+                g_resizeStartW = g_winW;
+                g_resizeStartH = g_winH;
+                SetCapture(hwnd);
+                return 0;
+            }
+        }
         if (g_mode == M_SEARCH && (int)g_results.size() > 7) {
             POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
             RECT th = ScrollThumbRect();
@@ -1272,7 +1303,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             RECT tr = ScrollTrackRect();
             if (p.x >= tr.left - 6 && p.x < tr.right + 6 && p.y >= tr.top && p.y < tr.bottom) {
-                g_scroll += (p.y < th.top) ? -7 : 7;
+                g_scroll += (p.y < th.top) ? -VisibleRows() : VisibleRows();
                 UpdateScrollInfo();
                 InvalidateRect(hwnd, nullptr, FALSE);
                 return 0;
@@ -1289,7 +1320,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             RECT pill = { a.left - 8, a.top - 6, b2.right + 8, b2.bottom + 6 };
             if (p.x >= pill.left && p.x < pill.right && p.y >= pill.top && p.y < pill.bottom) {
                 int mid = (a.left + b2.right) / 2;
-                if (p.x < mid) OpenPath(ExeDir() + L"\\actions");
+                if (p.x < mid) ShellExecuteW(nullptr, L"open", L"explorer.exe", (L"\"" + ExeDir() + L"\\actions\"").c_str(), nullptr, SW_SHOWNORMAL);
                 else { g_mode = M_SETTINGS; g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); }
                 return 0;
             }
@@ -1318,7 +1349,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 InvalidateRect(hwnd, nullptr, TRUE);
             }
         } else if (g_mode == M_SEARCH) {
-    for (int row = 0; row < 7; ++row) {
+    for (int row = 0; row < VisibleRows(); ++row) {
         int i = g_scroll + row;
         if (i >= (int)g_results.size()) break;
         RECT r = RowRect(row);
@@ -1367,8 +1398,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             switch (LOWORD(wp)) {
                 case SB_LINEUP:   pos -= 1; break;
                 case SB_LINEDOWN: pos += 1; break;
-                case SB_PAGEUP:   pos -= 7; break;
-                case SB_PAGEDOWN: pos += 7; break;
+                case SB_PAGEUP:   pos -= VisibleRows(); break;
+                case SB_PAGEDOWN: pos += VisibleRows(); break;
                 case SB_THUMBTRACK:
                 case SB_THUMBPOSITION: pos = HIWORD(wp); break;
             }
