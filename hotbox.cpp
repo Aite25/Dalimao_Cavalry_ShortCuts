@@ -1056,9 +1056,9 @@ static void Paint(HWND hwnd) {
     if (g_mode != M_SETTINGS) DrawTopIcons(mem);   // 设置页右上角是关闭按钮
     if (g_mode != M_PIE) {   // 仅搜索/设置页显示拖拽条
         RECT pr = PanelRect();
-        HBRUSH gb = CreateSolidBrush(RGB(46, 46, 50));
+        HBRUSH gb = CreateSolidBrush(RGB(34, 34, 37));
         RECT b1 = { pr.left + 8, pr.bottom - 12, pr.right - 8, pr.bottom - 5 };
-        RECT b2 = { pr.right - 12, pr.top + 8, pr.right - 5, pr.bottom - 8 };
+        RECT b2 = { pr.right - 12, pr.top + 48, pr.right - 5, pr.bottom - 8 };
         FillRect(mem, &b1, gb);
         FillRect(mem, &b2, gb);
         HBRUSH db = CreateSolidBrush(RGB(140, 140, 148));
@@ -1283,7 +1283,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         POINT cp; GetCursorPos(&cp); ScreenToClient(hwnd, &cp);
         RECT pc = PanelRect();
         int ed = 0;
-        if (g_mode != M_PIE && cp.x >= pc.right - 14) ed |= 1;
+        if (g_mode != M_PIE && cp.x >= pc.right - 14 && cp.y >= pc.top + 48) ed |= 1;
         if (g_mode != M_PIE && cp.y >= pc.bottom - 14) ed |= 2;
         if (ed) { SetCursor(LoadCursor(nullptr, (ed == 3) ? IDC_SIZENWSE : (ed == 1 ? IDC_SIZEWE : IDC_SIZENS))); return TRUE; }
         break;
@@ -1335,7 +1335,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         {
             int ex = (int)GET_X_LPARAM(lp), ey = (int)GET_Y_LPARAM(lp);
             int edges = 0;
-            if (g_mode != M_PIE && ex >= PanelRect().right - 14) edges |= 1;
+            if (g_mode != M_PIE && ex >= PanelRect().right - 14 && ey >= PanelRect().top + 48) edges |= 1;
             if (g_mode != M_PIE && ey >= PanelRect().bottom - 14) edges |= 2;
             if (edges) {
                 g_resizing = true;
