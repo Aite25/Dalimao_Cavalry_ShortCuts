@@ -1,6 +1,0 @@
-﻿*.log
-*.obj
-*.pdb
-*.ilk
-.vs/
-__pycache__/
