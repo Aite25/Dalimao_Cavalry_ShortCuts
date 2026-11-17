@@ -1221,7 +1221,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
     case WM_CHAR: {
         if (g_mode == M_SEARCH) {
-            if (g_edit && GetFocus() != g_edit) {
+            if (g_edit) {   // 消息能到主窗口，就说明字符是冲我们来的，一律转交
                 SendMessageW(g_edit, WM_CHAR, wp, lp);
                 SendMessageW(g_edit, EM_SETSEL, (WPARAM)-1, (LPARAM)-1);
             }
