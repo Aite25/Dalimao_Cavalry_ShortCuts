@@ -93,7 +93,6 @@ static int g_trayTick = 0;
 static bool g_inMenu = false;
 static bool g_dragging = false;
 static bool g_selAll = false;
-static bool g_swallowNextChar = false;
 static void SyncEditText();
 static POINT g_dragOffset = {0, 0};
 
@@ -1048,7 +1047,6 @@ static void EnterSearch(wchar_t firstChar = 0) {
     g_sel = 0;
     g_scroll = 0;
     g_selAll = false;
-    g_swallowNextChar = (firstChar != 0);   // 字母触发时丢掉这个字符
     SyncEditText();
     UpdateResults();
     SyncEditFromMode();
@@ -1223,7 +1221,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
     case WM_CHAR: {
         if (g_mode == M_SEARCH) {
-            if (g_swallowNextChar) { g_swallowNextChar = false; return 0; }   // 触发键丢弃，留给输入法
             if (g_edit && GetFocus() != g_edit) {
                 SendMessageW(g_edit, WM_CHAR, wp, lp);
                 SendMessageW(g_edit, EM_SETSEL, (WPARAM)-1, (LPARAM)-1);
