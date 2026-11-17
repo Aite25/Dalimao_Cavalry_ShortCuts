@@ -237,7 +237,7 @@ static void DrawPieTabs(HDC dc) {
         RECT r = TabBoxRect(i);
         bool on = (i == g_box);
         { HBRUSH tb = CreateSolidBrush(on ? RGB(52, 54, 60) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
-          HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(70, 74, 84) : RGB(52, 52, 58)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
+          HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(52, 54, 60) : RGB(36, 36, 40)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
           Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
@@ -252,7 +252,7 @@ static void DrawPieTabs(HDC dc) {
         RECT r = TabModRect(i);
         bool on = (i == g_mod);
         { HBRUSH tb = CreateSolidBrush(on ? RGB(52, 54, 60) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
-          HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(70, 74, 84) : RGB(52, 52, 58)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
+          HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(52, 54, 60) : RGB(36, 36, 40)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
           Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
@@ -827,7 +827,7 @@ static void DrawPie(HDC dc) {
     for (int i = 0; i < 8; ++i) {
         RECT r = SectorRect(i);
         bool sel = (i == g_hover);
-        FillRound(dc, r, 8, sel ? kSectorSel : kSectorFill, kSectorBorder);
+        FillRound(dc, r, 8, kSectorFill, sel ? kRowSel : kSectorBorder);   // 选中：蓝色描边
 
         SetBkMode(dc, TRANSPARENT);
         HFONT f = MakeFont(15);
@@ -1723,14 +1723,36 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         return 0;
     }
-    case WM_MOUSEWHEEL:
+    case WM_MOUSEWHEEL: {
+        POINT mp; GetCursorPos(&mp); ScreenToClient(hwnd, &mp);
+        int delta = GET_WHEEL_DELTA_WPARAM(wp);
+        if (g_mode == M_PIE) {
+            for (int i = 0; i < 4; ++i) {
+                RECT br = TabBoxRect(i);
+                if (mp.x >= br.left && mp.x < br.right && mp.y >= br.top && mp.y < br.bottom) {
+                    SwitchSet((g_box + (delta > 0 ? 3 : 1)) % 4, g_mod); InvalidateRect(hwnd, nullptr, TRUE); return 0;
+                }
+                RECT mr = TabModRect(i);
+                if (mp.x >= mr.left && mp.x < mr.right && mp.y >= mr.top && mp.y < mr.bottom) {
+                    SwitchSet(g_box, (g_mod + (delta > 0 ? 3 : 1)) % 4); InvalidateRect(hwnd, nullptr, TRUE); return 0;
+                }
+            }
+        }
         if (g_mode == M_SEARCH) {
-            g_scroll -= (GET_WHEEL_DELTA_WPARAM(wp) / WHEEL_DELTA) * 3;
+            for (int i = 0; i < kTabCount; ++i) {
+                RECT tr = TabRect(i);
+                if (mp.x >= tr.left && mp.x < tr.right && mp.y >= tr.top && mp.y < tr.bottom) {
+                    g_tab = (g_tab + (delta > 0 ? kTabCount - 1 : 1)) % kTabCount;
+                    g_sel = 0; g_scroll = 0; UpdateResults(); InvalidateRect(hwnd, nullptr, TRUE); return 0;
+                }
+            }
+            g_scroll -= (delta / WHEEL_DELTA) * 3;
             UpdateScrollInfo();
             InvalidateRect(hwnd, nullptr, FALSE);
             return 0;
         }
         break;
+    }
     case WM_KEYDOWN: {
         if (g_mode == M_PIE && (wp == VK_OEM_3 || wp == VK_SPACE)) { PostMessageW(hwnd, WM_APP + 7, 0, 0); return 0; }   // ` 或空格确认圆盘项
         if (g_mode == M_SEARCH) {
