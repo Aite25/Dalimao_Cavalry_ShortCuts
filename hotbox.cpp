@@ -1039,6 +1039,24 @@ static void Paint(HWND hwnd) {
     }
 
     if (g_mode != M_SETTINGS) DrawTopIcons(mem);   // 设置页右上角是关闭按钮
+    {   // 拖拽条（不透明，从内部命中）
+        RECT pr = PanelRect();
+        HBRUSH gb = CreateSolidBrush(RGB(46, 46, 50));
+        RECT b1 = { pr.left + 8, pr.bottom - 12, pr.right - 8, pr.bottom - 5 };
+        RECT b2 = { pr.right - 12, pr.top + 8, pr.right - 5, pr.bottom - 8 };
+        FillRect(mem, &b1, gb);
+        FillRect(mem, &b2, gb);
+        HBRUSH db = CreateSolidBrush(RGB(140, 140, 148));
+        int cxp = (pr.left + pr.right) / 2, cyp = (pr.top + pr.bottom) / 2;
+        for (int i = -1; i <= 1; ++i) {
+            RECT d1 = { cxp + i * 8 - 1, pr.bottom - 10, cxp + i * 8 + 2, pr.bottom - 7 };
+            RECT d2 = { pr.right - 10, cyp + i * 8 - 1, pr.right - 7, cyp + i * 8 + 2 };
+            FillRect(mem, &d1, db);
+            FillRect(mem, &d2, db);
+        }
+        DeleteObject(db);
+        DeleteObject(gb);
+    }
 
     {   // grips: bottom-mid and right-mid, inside panel
         HBRUSH db = CreateSolidBrush(RGB(140, 140, 148));
@@ -1258,6 +1276,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         g_dragging = false;
         ReleaseCapture();
         return 0;
+    case WM_SETCURSOR: {
+        POINT cp; GetCursorPos(&cp); ScreenToClient(hwnd, &cp);
+        RECT pc = PanelRect();
+        int ed = 0;
+        if (cp.x >= pc.right - 14) ed |= 1;
+        if (cp.y >= pc.bottom - 14) ed |= 2;
+        if (ed) { SetCursor(LoadCursor(nullptr, (ed == 3) ? IDC_SIZENWSE : (ed == 1 ? IDC_SIZEWE : IDC_SIZENS))); return TRUE; }
+        break;
+    }
     case WM_MOUSEMOVE: {
         if (g_mode == M_SEARCH) {
             POINT mp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
@@ -1291,8 +1318,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         {
             int ex = (int)GET_X_LPARAM(lp), ey = (int)GET_Y_LPARAM(lp);
             int edges = 0;
-            if (ex >= PanelRect().right) edges |= 1;
-            if (ey >= PanelRect().bottom) edges |= 2;
+            if (ex >= PanelRect().right - 14) edges |= 1;
+            if (ey >= PanelRect().bottom - 14) edges |= 2;
             if (edges) {
                 g_resizing = true;
                 g_resizeEdges = edges;
