@@ -56,7 +56,7 @@ static const COLORREF kPanelFill    = RGB(30, 30, 32);
 static const COLORREF kPanelBorder  = RGB(70, 70, 74);
 static const COLORREF kRowSel       = RGB(56, 119, 181);
 
-static const int kCenterR  = 36;
+static const int kCenterR  = 28;
 static const int kRectW    = 150;
 static const int kRectH    = 34;
 static const int kOffVert  = 118;
@@ -764,7 +764,7 @@ static void DrawPie(HDC dc) {
         RECT r = SectorRect(g_hover);
         double tx = (r.left + r.right) / 2.0 - cx, ty = (r.top + r.bottom) / 2.0 - cy;
         double ang = atan2(ty, tx);
-        int ar = kCenterR + 10;
+        int ar = kCenterR - 9;   // 弧线画在中心圆内部（AE 版）
         HPEN pen = CreatePen(PS_SOLID, 4, kArcColor);
         HGDIOBJ op = SelectObject(dc, pen);
         HGDIOBJ ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
