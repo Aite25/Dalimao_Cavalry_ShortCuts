@@ -35,8 +35,8 @@
 
 // ---------------------------------------------------------------- 常量
 static const int kBridgePort = 6769;
-static const int kWinW = 640;
-static const int kWinH = 560;
+static int g_winW = 640;
+static int g_winH = 560;
 
 static const COLORREF kBg          = RGB(0, 0, 0);        // 色键透明
 static const COLORREF kSectorFill  = RGB(35, 35, 35);
@@ -354,7 +354,7 @@ static void SyncEditFromMode() {
         SetWindowPos(g_edit, HWND_TOP, ir.left + 8, ir.top + 6,
                      ir.right - ir.left - 16, ir.bottom - ir.top - 10, SWP_SHOWWINDOW);
         {
-            RECT pr = { 40, 60, kWinW - 40, kWinH - 60 };   // 与 PanelRect 一致
+            RECT pr = { 40, 60, g_winW - 40, g_winH - 60 };   // 与 PanelRect 一致
             SetWindowPos(g_scrollbar, HWND_TOP, pr.right - 30, pr.top + 110,
                          14, 7 * 38 - 4, SWP_NOZORDER);
             UpdateScrollInfo();
@@ -560,8 +560,8 @@ static void UpdateResults() {
 }
 
 // ---------------------------------------------------------------- 几何
-static int CenterX() { return kWinW / 2; }
-static int CenterY() { return kWinH / 2; }
+static int CenterX() { return g_winW / 2; }
+static int CenterY() { return g_winH / 2; }
 
 static RECT SectorRect(int index) {
     int cx = CenterX(), cy = CenterY();
@@ -597,7 +597,7 @@ static int HitTestPie(POINT p) {
 
 static RECT PanelRect() {
     RECT r;
-    r.left = 40; r.top = 60; r.right = kWinW - 40; r.bottom = kWinH - 60;
+    r.left = 24; r.top = 24; r.right = g_winW - 24; r.bottom = g_winH - 24;
     return r;
 }
 
@@ -623,10 +623,11 @@ static RECT TabRect(int i) {
 }
 
 static RECT IconRect(int i) {   // 0=文件夹 1=齿轮
+    RECT p = PanelRect();
     RECT r;
-    r.right = kWinW - 14 - i * 34;
+    r.right = p.right - 14 - i * 34;
     r.left = r.right - 28;
-    r.top = 12;
+    r.top = p.top + 8;
     r.bottom = r.top + 28;
     return r;
 }
@@ -924,17 +925,23 @@ static void DrawTabs(HDC dc) {
     for (int i = 0; i < kTabCount; ++i) {
         RECT r = TabRect(i);
         bool on = (i == g_tab);
-        FillRound(dc, r, 6, on ? kRowSel : RGB(44, 44, 47), on ? kRowSel : RGB(60, 60, 64));
+
         SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, on ? RGB(255, 255, 255) : RGB(190, 190, 190));
-        HFONT f = MakeFont(13);
+        SetTextColor(dc, on ? RGB(255, 255, 255) : RGB(150, 150, 155));
+        HFONT f = MakeFont(14);
         HGDIOBJ of = SelectObject(dc, f);
         DrawTextW(dc, kTabs[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         SelectObject(dc, of);
         DeleteObject(f);
+
+        if (on) {
+            RECT u = { r.left + 10, r.bottom - 2, r.right - 10, r.bottom };
+            HBRUSH b = CreateSolidBrush(kRowSel);
+            FillRect(dc, &u, b);
+            DeleteObject(b);
+        }
     }
 }
-
 static void DrawTopIcons(HDC dc) {
     HPEN pen = CreatePen(PS_SOLID, 2, RGB(200, 200, 200));
     HGDIOBJ op = SelectObject(dc, pen);
@@ -969,10 +976,10 @@ static void Paint(HWND hwnd) {
     HDC dc = BeginPaint(hwnd, &ps);
 
     HDC mem = CreateCompatibleDC(dc);
-    HBITMAP bmp = CreateCompatibleBitmap(dc, kWinW, kWinH);
+    HBITMAP bmp = CreateCompatibleBitmap(dc, g_winW, g_winH);
     HGDIOBJ old = SelectObject(mem, bmp);
 
-    RECT bg = { 0, 0, kWinW, kWinH };
+    RECT bg = { 0, 0, g_winW, g_winH };
     HBRUSH bb = CreateSolidBrush(kBg);
     FillRect(mem, &bg, bb);
     DeleteObject(bb);
@@ -993,7 +1000,7 @@ static void Paint(HWND hwnd) {
 
     DrawTopIcons(mem);
 
-    BitBlt(dc, 0, 0, kWinW, kWinH, mem, 0, 0, SRCCOPY);
+    BitBlt(dc, 0, 0, g_winW, g_winH, mem, 0, 0, SRCCOPY);
     SelectObject(mem, old);
     DeleteObject(bmp);
     DeleteDC(mem);
@@ -1096,15 +1103,15 @@ static void ShowAtCursor(HWND hwnd) {
 
     POINT c;
     GetCursorPos(&c);
-    int x = c.x - kWinW / 2, y = c.y - kWinH / 2;
+    int x = c.x - g_winW / 2, y = c.y - g_winH / 2;
     RECT work;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
     if (x < work.left) x = work.left;
     if (y < work.top) y = work.top;
-    if (x + kWinW > work.right) x = work.right - kWinW;
-    if (y + kWinH > work.bottom) y = work.bottom - kWinH;
+    if (x + g_winW > work.right) x = work.right - g_winW;
+    if (y + g_winH > work.bottom) y = work.bottom - g_winH;
 
-    SetWindowPos(hwnd, HWND_TOP, x, y, kWinW, kWinH, SWP_SHOWWINDOW);
+    SetWindowPos(hwnd, HWND_TOP, x, y, g_winW, g_winH, SWP_SHOWWINDOW);
     ForceForeground(hwnd);
     InvalidateRect(hwnd, nullptr, TRUE);
 }
@@ -1394,6 +1401,20 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         return 0;
     }
+    case WM_APP + 5:
+        if (g_mode == M_SEARCH && wp >= 1 && wp <= 6) {
+            g_sel = (int)wp - 1;
+            ExecSelected();
+        }
+        return 0;
+    case WM_APP + 6:
+        if (g_mode == M_SEARCH) {
+            g_tab = (g_tab + ((wp == 1) ? kTabCount - 1 : 1)) % kTabCount;
+            g_sel = 0; g_scroll = 0;
+            UpdateResults();
+            InvalidateRect(hwnd, nullptr, TRUE);
+        }
+        return 0;
     case WM_APP + 1:
         ShowAtCursor(hwnd);
         return 0;
@@ -1447,7 +1468,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
 
     HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_LAYERED,
                                 L"CavalryHotbox", L"Cavalry Hotbox", WS_POPUP | WS_CLIPCHILDREN,
-                                0, 0, kWinW, kWinH, nullptr, nullptr, inst, nullptr);
+                                0, 0, g_winW, g_winH, nullptr, nullptr, inst, nullptr);
     g_main = hwnd;
     SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);
     CreateEdit(hwnd, inst);
