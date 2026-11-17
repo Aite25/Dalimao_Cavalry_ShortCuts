@@ -1399,6 +1399,45 @@ static bool IsCavalryWindow(HWND h) {
     CloseHandle(hProc);
     return ok;
 }
+static HWND g_cavalryWnd = nullptr;
+
+static BOOL CALLBACK FindCavalryProc(HWND h, LPARAM lp) {
+    if (!IsWindowVisible(h)) return TRUE;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    if (!pid) return TRUE;
+    HANDLE hp = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!hp) return TRUE;
+    wchar_t buf[MAX_PATH] = {0};
+    DWORD sz = MAX_PATH;
+    BOOL ok = QueryFullProcessImageNameW(hp, 0, buf, &sz);
+    CloseHandle(hp);
+    if (!ok) return TRUE;
+    std::wstring path(buf);
+    for (auto& ch : path) ch = (wchar_t)towlower(ch);
+    if (path.find(L"cavalry") != std::wstring::npos) {
+        *(HWND*)lp = h;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+// 定时调用：Cavalry 关了就退出；最小化就隐藏热盒
+static void TickCavalryState(HWND hotbox) {
+    if (!g_cavalryWnd || !IsWindow(g_cavalryWnd)) {
+        HWND found = nullptr;
+        EnumWindows(FindCavalryProc, (LPARAM)&found);
+        g_cavalryWnd = found;
+    }
+    if (!g_cavalryWnd) {
+        if (IsWindowVisible(hotbox)) ShowWindow(hotbox, SW_HIDE);
+        return;
+    }
+    if (IsIconic(g_cavalryWnd)) {
+        if (IsWindowVisible(hotbox)) ShowWindow(hotbox, SW_HIDE);
+    }
+}
+
 
 static LRESULT CALLBACK CatcherProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     if (m == WM_LBUTTONDOWN) {
@@ -1538,6 +1577,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             bool want = IsCavalryWindow(fg) || fg == hwnd || (g_main && fg == g_main) || (g_edit && fg == g_edit);
             if (want != g_hotkeyOn) SetHotkeyEnabled(want);
         }
+        TickCavalryState(hwnd);
         if (IsWindowVisible(hwnd) && g_mode == M_PIE) {
             if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) { ShowWindow(hwnd, SW_HIDE); return 0; }   // 右键取消
             POINT cp; GetCursorPos(&cp);
@@ -2043,6 +2083,16 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 // ---------------------------------------------------------------- 入口
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
+    {   // 单实例：已有实例则退出（避免多份窗口抢热键）
+        HANDLE mtx = CreateMutexW(nullptr, TRUE, L"CavalryShortCut_Single");
+        if (mtx && GetLastError() == ERROR_ALREADY_EXISTS) {
+            if (cmdLine && wcsstr(cmdLine, L"--show")) {
+                HWND ex = FindWindowW(L"CavalryShortCut", L"Cavalry ShortCut");
+                if (ex) PostMessageW(ex, WM_APP + 1, 0, 0);
+            }
+            return 0;
+        }
+    }
     if (cmdLine && wcsstr(cmdLine, L"--show")) {
         HWND existing = FindWindowW(L"CavalryShortCut", L"Cavalry ShortCut");
         if (existing) { PostMessageW(existing, WM_APP + 1, 0, 0); return 0; }
