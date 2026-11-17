@@ -240,6 +240,7 @@ static void DrawPieTabs(HDC dc) {
         { HBRUSH tb = CreateSolidBrush(on ? RGB(52, 54, 60) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
           HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(52, 54, 60) : RGB(36, 36, 40)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
           Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
         HFONT f = MakeFont(13, false);
@@ -256,6 +257,7 @@ static void DrawPieTabs(HDC dc) {
         { HBRUSH tb = CreateSolidBrush(on ? RGB(52, 54, 60) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
           HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(52, 54, 60) : RGB(36, 36, 40)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
           Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
         HFONT f = MakeFont(13, false);
@@ -308,6 +310,7 @@ static Gdiplus::Image* GetIcon(const std::wstring& type) {
 static void DrawIcon(HDC dc, const std::wstring& type, RECT box) {
     Gdiplus::Image* img = GetIcon(type);
     if (!img) return;
+        int dcSaved = SaveDC(dc);   // GDI+ 会改 DC 状态，用完恢复
     Gdiplus::Graphics g(dc);
     g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
     g.DrawImage(img, box.left, box.top, box.right - box.left, box.bottom - box.top);
@@ -832,6 +835,7 @@ static void DrawPie(HDC dc) {
         bool sel = (i == g_hover);
         FillRound(dc, r, 8, sel ? kSectorSel : kSectorFill, sel ? kRowSel : kSectorBorder);   // 选中：灰底 + 蓝框
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         HFONT f = MakeFont(15);
         HGDIOBJ of = SelectObject(dc, f);
@@ -841,8 +845,8 @@ static void DrawPie(HDC dc) {
             DrawTextW(dc, L"—", -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         } else {
             SetTextColor(dc, kText);
-            RECT tr = r; tr.left += 8; tr.right -= 26;
-            DrawTextW(dc, g_slots[i].name.c_str(), -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+            RECT tr = { r.left + 6, r.top, r.right - 6, r.bottom };
+            DrawTextW(dc, g_slots[i].name.c_str(), -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOCLIP);
 
             SetTextColor(dc, kTextDim);
             SetTextAlign(dc, TA_RIGHT | TA_TOP);
@@ -857,6 +861,7 @@ static void DrawPie(HDC dc) {
     int cx = CenterX(), cy = CenterY();
     // 中心圆 + 弧线：GDI+ 抗锯齿
     {
+        int dcSaved = SaveDC(dc);   // GDI+ 会改 DC 状态，用完恢复
         Gdiplus::Graphics g(dc);
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         Gdiplus::SolidBrush ffill(Gdiplus::Color(255, 38, 38, 38));
@@ -876,14 +881,16 @@ static void DrawPie(HDC dc) {
             g.DrawArc(&arcPen, (REAL)(cx - ar), (REAL)(cy - ar), (REAL)(ar * 2), (REAL)(ar * 2),
                       (REAL)(angDeg - 28.0), (REAL)56.0);
         }
+        RestoreDC(dc, dcSaved);
     }
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(150, 150, 150));
-    HFONT f = MakeFont(13);
+    HFONT f = MakeFont(11);
     HGDIOBJ of = SelectObject(dc, f);
     RECT cr = { cx - kCenterR, cy - 10, cx + kCenterR, cy + 10 };
-    DrawTextW(dc, L"Tab 搜索", -1, &cr, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
+    DrawTextW(dc, L"Tab 搜索", -1, &cr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(dc, of);
     DeleteObject(f);
 }
@@ -898,6 +905,7 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
     RECT p = PanelRect();
     FillRound(dc, p, 14, kPanelFill, kPanelBorder);
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
     SetBkMode(dc, TRANSPARENT);
     HFONT ft = MakeFont(13);
     HGDIOBJ of = SelectObject(dc, ft);
@@ -979,6 +987,7 @@ static void DrawResults(HDC dc) {
         }
         if (sel) { RECT bar = { r.left, r.top, r.left + 4, r.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, kText);
         HFONT f = MakeFont(15);
@@ -1008,6 +1017,7 @@ static void DrawResults(HDC dc) {
 
     if (g_results.empty() && !g_query.empty()) {
         RECT r = RowRect(0);
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, RGB(130, 130, 130));
         HFONT f = MakeFont(14);
@@ -1049,6 +1059,7 @@ static void DrawMiniPie(HDC dc, RECT area, int sel) {
         RECT r = { cx + x - bw / 2, cy + y - bh / 2, cx + x + bw / 2, cy + y + bh / 2 };
         bool on = (i == sel);
         FillRound(dc, r, 5, on ? kRowSel : kSectorFill, on ? kRowSel : kSectorBorder);
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, g_slots[i].used ? kText : RGB(100, 100, 100));
         HFONT f = MakeFont(12);
@@ -1063,6 +1074,7 @@ static void DrawSettings(HDC dc) {
     RECT p = PanelRect();
     FillRound(dc, p, 14, kPanelFill, kPanelBorder);
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
     SetBkMode(dc, TRANSPARENT);
     HFONT ft = MakeFont(13);
     HGDIOBJ of = SelectObject(dc, ft);
@@ -1085,6 +1097,7 @@ static void DrawSettings(HDC dc) {
         DeleteObject(pen);
     }
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(150, 150, 150));
     HFONT fp = MakeFont(12);
@@ -1105,6 +1118,7 @@ static void DrawSettings(HDC dc) {
         }
         if (sel) { RECT bar = { r.left, r.top, r.left + 4, r.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, kText);
         HFONT f = MakeFont(15);
@@ -1123,6 +1137,7 @@ static void DrawTabs(HDC dc) {
         RECT r = TabRect(i);
         bool on = (i == g_tab);
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(255, 255, 255) : RGB(150, 150, 155));
         HFONT f = MakeFont(14);
