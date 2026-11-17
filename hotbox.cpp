@@ -823,6 +823,13 @@ static void DrawResults(HDC dc) {
             HBRUSH fb = CreateSolidBrush(fillc);
             FillRect(dc, &r, fb);
             DeleteObject(fb);
+            // 行间 1px 极暗分隔线
+            {
+                RECT sl = { r.left, r.bottom - 1, r.right, r.bottom };
+                HBRUSH sb = CreateSolidBrush(RGB(42, 42, 45));
+                FillRect(dc, &sl, sb);
+                DeleteObject(sb);
+            }
         }
         if (sel) { RECT bar = { r.left, r.top, r.left + 4, r.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
 
