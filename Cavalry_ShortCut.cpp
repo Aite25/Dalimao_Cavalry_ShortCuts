@@ -760,30 +760,29 @@ static void DrawPie(HDC dc) {
 
     // 中心圆 + 弧线
     int cx = CenterX(), cy = CenterY();
-    if (g_hover >= 0) {
-        RECT r = SectorRect(g_hover);
-        double tx = (r.left + r.right) / 2.0 - cx, ty = (r.top + r.bottom) / 2.0 - cy;
-        double ang = atan2(ty, tx);
-        int ar = kCenterR - 9;   // 弧线画在中心圆内部（AE 版）
-        HPEN pen = CreatePen(PS_SOLID, 4, kArcColor);
-        HGDIOBJ op = SelectObject(dc, pen);
-        HGDIOBJ ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-        for (int i = 0; i < 18; ++i) {
-            double a1 = ang - 0.45 + 0.9 * i / 18.0;
-            double a2 = ang - 0.45 + 0.9 * (i + 1) / 18.0;
-            MoveToEx(dc, cx + (int)(cos(a1) * ar), cy + (int)(sin(a1) * ar), nullptr);
-            LineTo(dc, cx + (int)(cos(a2) * ar), cy + (int)(sin(a2) * ar));
-        }
-        SelectObject(dc, ob); SelectObject(dc, op);
-        DeleteObject(pen);
-    }
-
     HBRUSH b = CreateSolidBrush(kCenterFill);
     HPEN p = CreatePen(PS_SOLID, 3, kCenterBorder);
     HGDIOBJ ob = SelectObject(dc, b), op = SelectObject(dc, p);
     Ellipse(dc, cx - kCenterR, cy - kCenterR, cx + kCenterR, cy + kCenterR);
     SelectObject(dc, ob); SelectObject(dc, op);
     DeleteObject(b); DeleteObject(p);
+    if (g_hover >= 0) {
+        RECT r = SectorRect(g_hover);
+        double tx = (r.left + r.right) / 2.0 - cx, ty = (r.top + r.bottom) / 2.0 - cy;
+        double ang = atan2(ty, tx);
+        int ar = kCenterR - 9;   // 弧线画在中心圆内部（AE 版）
+        HPEN pen = CreatePen(PS_SOLID, 3, kArcColor);
+        HGDIOBJ op = SelectObject(dc, pen);
+        HGDIOBJ ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
+        for (int i = 0; i < 18; ++i) {
+            double a1 = ang - 0.5 + 1.0 * i / 18.0;
+            double a2 = ang - 0.5 + 1.0 * (i + 1) / 18.0;
+            MoveToEx(dc, cx + (int)(cos(a1) * ar), cy + (int)(sin(a1) * ar), nullptr);
+            LineTo(dc, cx + (int)(cos(a2) * ar), cy + (int)(sin(a2) * ar));
+        }
+        SelectObject(dc, ob); SelectObject(dc, op);
+        DeleteObject(pen);
+    }
 
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(150, 150, 150));
