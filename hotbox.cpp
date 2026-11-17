@@ -1281,7 +1281,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE && !g_inMenu && !g_resizing && !g_thumbDrag) {
-            ShowWindow(hwnd, SW_HIDE);   // 点到热盒外面 → 收起（不重置搜索状态）
+            bool leftDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+            if (leftDown && g_mode == M_SEARCH && !g_results.empty()) {
+                if (g_hoverRow >= 0 && g_hoverRow < (int)g_results.size()) g_sel = g_hoverRow;
+                ExecSelected();   // 点热盒外面 = 应用当前高亮项
+            } else {
+                ShowWindow(hwnd, SW_HIDE);
+            }
         }
         return 0;
     case WM_SETCURSOR: {
