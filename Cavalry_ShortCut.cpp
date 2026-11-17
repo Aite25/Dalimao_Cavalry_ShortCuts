@@ -22,8 +22,13 @@
 #include <shellapi.h>
 #include <imm.h>
 #include <commctrl.h>
+#include <propidl.h>
+#include <gdiplus.h>
+#pragma comment(lib, "gdiplus.lib")
+using namespace Gdiplus;
 #include <string>
 #include <vector>
+#include <map>
 #include <algorithm>
 #include <cstdio>
 
@@ -184,6 +189,52 @@ static void WriteFileUtf8(const std::wstring& path, const std::string& data) {
 static std::wstring ToLower(std::wstring s) {
     for (auto& c : s) c = (wchar_t)towlower(c);
     return s;
+}
+
+// ---------------------------------------------------------------- 图标（Add Layers 同款）
+static ULONG_PTR g_gdiplusToken = 0;
+static std::wstring g_iconDir;
+static std::map<std::wstring, Gdiplus::Image*> g_iconCache;
+
+static void Log(const std::string& s);
+
+static void InitIcons() {
+    GdiplusStartupInput si;
+    Gdiplus::GdiplusStartup(&g_gdiplusToken, &si, nullptr);
+
+    const wchar_t* cands[] = {
+        L"C:\\Program Files\\Cavalry\\assets\\Icons\\nodes",
+        L"E:\\Program Files\\Cavalry\\assets\\Icons\\nodes",
+        L"D:\\Program Files\\Cavalry\\assets\\Icons\\nodes",
+    };
+    for (auto c : cands) {
+        if (GetFileAttributesW(c) != INVALID_FILE_ATTRIBUTES) { g_iconDir = c; break; }
+    }
+    if (g_iconDir.empty()) Log("icons: not found");
+    else Log("icons: " + Narrow(g_iconDir));
+}
+
+static Gdiplus::Image* GetIcon(const std::wstring& type) {
+    if (g_iconDir.empty() || type.empty()) return nullptr;
+    auto it = g_iconCache.find(type);
+    if (it != g_iconCache.end()) return it->second;
+
+    std::wstring path = g_iconDir + L"\\" + type + L".png";
+    Gdiplus::Image* img = nullptr;
+    if (GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        img = Gdiplus::Image::FromFile(path.c_str());
+        if (img && img->GetLastStatus() != Gdiplus::Ok) { delete img; img = nullptr; }
+    }
+    g_iconCache[type] = img;
+    return img;
+}
+
+static void DrawIcon(HDC dc, const std::wstring& type, RECT box) {
+    Gdiplus::Image* img = GetIcon(type);
+    if (!img) return;
+    Gdiplus::Graphics g(dc);
+    g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+    g.DrawImage(img, box.left, box.top, box.right - box.left, box.bottom - box.top);
 }
 
 static void Log(const std::string& s) {
@@ -839,10 +890,12 @@ static void DrawResults(HDC dc) {
         SetTextColor(dc, kText);
         HFONT f = MakeFont(15);
         HGDIOBJ of = SelectObject(dc, f);
-        RECT tr = r; tr.left += 34; tr.right -= 90;
+        RECT ibox = { r.left + 30, r.top + 5, r.left + 46, r.top + 21 };
+        if (g_results[i].kind == L"layer") DrawIcon(dc, g_results[i].value, ibox);
+        RECT tr = r; tr.left += 52; tr.right -= 90;
         if (row < 6) {   // 只给当前可见的前 6 行编号
             SetTextColor(dc, hov ? RGB(225, 232, 245) : (sel ? RGB(200, 200, 210) : RGB(120, 120, 128)));
-            RECT nr = r; nr.left += 12; nr.right = nr.left + 20;
+            RECT nr = r; nr.left += 8; nr.right = nr.left + 22;
             std::wstring num = std::to_wstring(row + 1);
             DrawTextW(dc, num.c_str(), -1, &nr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
             SetTextColor(dc, kText);
@@ -1705,6 +1758,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     ImmAssociateContext(hwnd, nullptr);   // 主窗口不吃输入法；输入框仍可用中文
     // 输入法保持启用：中文搜索需要它
 
+    InitIcons();
     LoadConfig();
     LoadIndex();
     LoadSectors();
