@@ -1157,6 +1157,23 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
 // 圆盘用色键透明，透明像素的点击会穿透到下层窗口。为了能收到"热盒外部"的左键，
 // 额外铺一层几乎全透明（alpha=1）的全屏窗口，只负责接收点击。
 static HWND g_catcher = nullptr;
+static bool IsCavalryWindow(HWND h) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    if (!pid) return false;
+    HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!hProc) return false;
+    wchar_t path[MAX_PATH] = {0};
+    DWORD size = MAX_PATH;
+    bool ok = false;
+    if (QueryFullProcessImageNameW(hProc, 0, path, &size)) {
+        std::wstring s = path;
+        for (auto& c : s) c = (wchar_t)towlower(c);
+        ok = (s.find(L"cavalry.exe") != std::wstring::npos);
+    }
+    CloseHandle(hProc);
+    return ok;
+}
 
 static LRESULT CALLBACK CatcherProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     if (m == WM_LBUTTONDOWN) {
@@ -1220,7 +1237,7 @@ static void ShowAtCursor(HWND hwnd) {
     if (y + g_winH > work.bottom) y = work.bottom - g_winH;
 
     SetWindowPos(hwnd, HWND_TOP, x, y, g_winW, g_winH, SWP_SHOWWINDOW);
-    ShowCatcher(g_mode == M_PIE);
+    ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
     ForceForeground(hwnd);
     InvalidateRect(hwnd, nullptr, TRUE);
 }
@@ -1301,7 +1318,23 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (nowDown && !prevDown) Log("pie click: hover=" + std::to_string(g_hover));
                 prevDown = nowDown;
             }
-            if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) {
+            if (true) {
+                HWND fg = GetForegroundWindow();
+                static HWND lastFg = nullptr;
+                if (fg && fg != g_main && fg != lastFg) {
+                    lastFg = fg;
+                    if (IsCavalryWindow(fg)) {
+                        if (g_hover >= 0 && g_slots[g_hover].used) {
+                            Item it{ g_slots[g_hover].name, g_slots[g_hover].kind, g_slots[g_hover].value };
+                            RunItem(it);
+                        }
+                    } else {
+                        ShowWindow(hwnd, SW_HIDE);
+                    }
+                }
+                (void)0;
+            }
+            if (false && (GetAsyncKeyState(VK_LBUTTON) & 0x8000)) {
                 bool outside = (cl.x < 0 || cl.y < 0 || cl.x >= g_winW || cl.y >= g_winH);
                 if (g_hover >= 0 && g_slots[g_hover].used) {
                     Item it{ g_slots[g_hover].name, g_slots[g_hover].kind, g_slots[g_hover].value };
