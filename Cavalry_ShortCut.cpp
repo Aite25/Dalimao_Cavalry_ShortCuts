@@ -207,7 +207,7 @@ static RECT TabBoxRect(int i) {   // 第一行：1..4
     RECT r;
     r.left = 24 + i * 46;
     r.top = 24;
-    r.right = r.left + 40;
+    r.right = r.left + 46;
     r.bottom = r.top + 24;
     return r;
 }
@@ -216,7 +216,7 @@ static RECT TabModRect(int i) {   // 第二行：无 / Ctrl / Shift / Alt
     RECT r;
     r.left = 24 + i * 58;
     r.top = 52;
-    r.right = r.left + 52;
+    r.right = r.left + 58;
     r.bottom = r.top + 24;
     return r;
 }
@@ -236,7 +236,9 @@ static void DrawPieTabs(HDC dc) {
     for (int i = 0; i < 4; ++i) {
         RECT r = TabBoxRect(i);
         bool on = (i == g_box);
-        FillRound(dc, r, 4, on ? RGB(52, 54, 60) : RGB(36, 36, 40), on ? RGB(70, 74, 84) : RGB(52, 52, 58));
+        { HBRUSH tb = CreateSolidBrush(on ? RGB(52, 54, 60) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
+          HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(70, 74, 84) : RGB(52, 52, 58)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
+          Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
         HFONT f = MakeFont(14, on);
@@ -249,7 +251,9 @@ static void DrawPieTabs(HDC dc) {
     for (int i = 0; i < 4; ++i) {
         RECT r = TabModRect(i);
         bool on = (i == g_mod);
-        FillRound(dc, r, 4, on ? RGB(52, 54, 60) : RGB(36, 36, 40), on ? RGB(70, 74, 84) : RGB(52, 52, 58));
+        { HBRUSH tb = CreateSolidBrush(on ? RGB(52, 54, 60) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
+          HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(70, 74, 84) : RGB(52, 52, 58)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
+          Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
         HFONT f = MakeFont(13, on);
