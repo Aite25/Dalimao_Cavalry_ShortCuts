@@ -312,19 +312,15 @@ static void UpdateScrollInfo();
 #define ID_SCROLL 4002
 
 static LRESULT CALLBACK EditSubclass(HWND h, UINT m, WPARAM w, LPARAM l, UINT_PTR id, DWORD_PTR ref) {
-    if (m == WM_CHAR && w < 32 && w != 8) return 0;   // 吞掉控制字符（保留 Backspace=8），避免 Ctrl+A 的提示音
+    if (m == WM_CHAR && w < 32 && w != 8) return 0;   // 控制字符（保留 Backspace=8）
     if (m == WM_KEYDOWN) {
-    if (m == WM_KEYDOWN && w == 'A' && (GetKeyState(VK_CONTROL) & 0x8000)) {
-        SendMessageW(h, EM_SETSEL, (WPARAM)0, (LPARAM)-1);
-        return 0;
-    }
+        bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        if (ctrl && w == 'A') { SendMessageW(h, EM_SETSEL, (WPARAM)0, (LPARAM)-1); return 0; }
+        if (ctrl && w >= '1' && w <= '6') { PostMessageW(g_main, WM_APP + 5, (WPARAM)(w - '0'), 0); return 0; }
+        if (w == VK_TAB) { PostMessageW(g_main, WM_APP + 6, (WPARAM)(shift ? 1 : 0), 0); return 0; }
         if (w == VK_ESCAPE || w == VK_RETURN || w == VK_UP || w == VK_DOWN) {
             PostMessageW(g_main, WM_KEYDOWN, w, 0);
-            return 0;
-        }
-        if (w == VK_TAB) {
-            SetFocus(g_edit);
-            PostMessageW(g_main, WM_KEYDOWN, VK_ESCAPE, 0);   // Tab 退出搜索
             return 0;
         }
     }
@@ -605,8 +601,8 @@ static RECT RowRect(int i) {
     RECT p = PanelRect();
     RECT r;
     r.left = p.left + 16;
-    r.right = p.right - 16;
-    r.top = p.top + 110 + i * 38;
+    r.right = p.right - 34;
+    r.top = p.top + 118 + i * 38;
     r.bottom = r.top + 34;
     return r;
 }
@@ -625,10 +621,10 @@ static RECT TabRect(int i) {
 static RECT IconRect(int i) {   // 0=文件夹 1=齿轮
     RECT p = PanelRect();
     RECT r;
-    r.right = p.right - 14 - i * 34;
-    r.left = r.right - 28;
-    r.top = p.top + 8;
-    r.bottom = r.top + 28;
+    r.right = p.right - 12 - i * 26;
+    r.left = r.right - 20;
+    r.top = p.top + 10;
+    r.bottom = r.top + 20;
     return r;
 }
 
@@ -839,7 +835,7 @@ static RECT SettingRowRect(int i) {
     RECT r;
     r.left = p.left + 232;
     r.right = p.right - 16;
-    r.top = p.top + 110 + i * 38;
+    r.top = p.top + 118 + i * 38;
     r.bottom = r.top + 34;
     return r;
 }
@@ -943,7 +939,7 @@ static void DrawTabs(HDC dc) {
     }
 }
 static void DrawTopIcons(HDC dc) {
-    HPEN pen = CreatePen(PS_SOLID, 2, RGB(200, 200, 200));
+    HPEN pen = CreatePen(PS_SOLID, 1, RGB(140, 140, 145));
     HGDIOBJ op = SelectObject(dc, pen);
     HGDIOBJ ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
 
