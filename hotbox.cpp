@@ -1282,19 +1282,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE && !g_inMenu && !g_resizing && !g_thumbDrag) {
-            if (g_mode == M_SEARCH) {
-                ShowWindow(hwnd, SW_HIDE);      // 搜索面板：点外面就关闭
-            } else if (g_mode == M_PIE) {
-                bool leftDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
-                if (leftDown && g_hover >= 0 && g_slots[g_hover].used) {
-                    Item it{ g_slots[g_hover].name, g_slots[g_hover].kind, g_slots[g_hover].value };
-                    RunItem(it);                 // 圆盘：点外面 = 确认当前高亮扇区
-                } else {
-                    ShowWindow(hwnd, SW_HIDE);
-                }
-            } else {
-                ShowWindow(hwnd, SW_HIDE);
-            }
+            if (g_mode == M_SEARCH) ShowWindow(hwnd, SW_HIDE);   // 搜索面板：点外面关闭；圆盘交给定时器
+            else if (g_mode == M_SETTINGS) ShowWindow(hwnd, SW_HIDE);
         }
         return 0;
     case WM_SETCURSOR: {
