@@ -1255,6 +1255,22 @@ static void OpenPath(const std::wstring& path) {
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_TIMER:
+        if (IsWindowVisible(hwnd) && g_mode == M_PIE) {
+            POINT cp; GetCursorPos(&cp);
+            POINT cl = cp; ScreenToClient(hwnd, &cl);
+            int hv = HitTestPie(cl);
+            if (hv < 0) hv = -1;
+            if (hv != g_hover) { g_hover = hv; InvalidateRect(hwnd, nullptr, FALSE); }
+            if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) {
+                bool outside = (cl.x < 0 || cl.y < 0 || cl.x >= g_winW || cl.y >= g_winH);
+                if (g_hover >= 0 && g_slots[g_hover].used) {
+                    Item it{ g_slots[g_hover].name, g_slots[g_hover].kind, g_slots[g_hover].value };
+                    RunItem(it);
+                } else if (outside) {
+                    ShowWindow(hwnd, SW_HIDE);
+                }
+            }
+        }
         if (g_mode == M_SEARCH && IsWindowVisible(hwnd) && g_edit) {
             if (GetFocus() != g_edit) SetFocus(g_edit);
         }
