@@ -1199,9 +1199,15 @@ static void LoadConfig() {
 // ---------------------------------------------------------------- 鼠标钩子（圆盘外部确认）
 static HHOOK g_mouseHook = nullptr;
 static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
-    if (nCode == HC_ACTION && (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP) && g_main && IsWindowVisible(g_main) && g_mode == M_PIE) {
-        if (wParam == WM_RBUTTONDOWN) PostMessageW(g_main, WM_APP + 8, 0, 0);
-        return 1;   // 按下与抬起都吞掉，避免 WM_CONTEXTMENU 触发 Cavalry 菜单
+    static bool swallowUp = false;
+    if (nCode == HC_ACTION && wParam == WM_RBUTTONDOWN && g_main && IsWindowVisible(g_main) && g_mode == M_PIE) {
+        swallowUp = true;
+        PostMessageW(g_main, WM_APP + 8, 0, 0);
+        return 1;
+    }
+    if (nCode == HC_ACTION && wParam == WM_RBUTTONUP && swallowUp) {
+        swallowUp = false;
+        return 1;   // 抬起也吞掉，阻断 WM_CONTEXTMENU
     }
     if (nCode == HC_ACTION && wParam == WM_LBUTTONDOWN && g_main && IsWindowVisible(g_main) && g_mode == M_PIE) {
         PostMessageW(g_main, WM_APP + 7, 0, 0);
