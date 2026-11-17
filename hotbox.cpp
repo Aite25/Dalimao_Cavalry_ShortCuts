@@ -1046,6 +1046,8 @@ static void ShowAtCursor(HWND hwnd) {
     g_hover = -1;
     g_bindSlot = -1;
     LoadSectors();
+    SyncEditFromMode();      // 回到圆盘：收起输入框
+    UpdateScrollInfo();      // 顺手把滚动条也藏掉
 
     POINT c;
     GetCursorPos(&c);
