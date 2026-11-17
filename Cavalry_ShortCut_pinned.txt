@@ -1,0 +1,2 @@
+﻿script|Duplicator.js
+layer|rectangle

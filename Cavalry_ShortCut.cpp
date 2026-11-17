@@ -978,6 +978,12 @@ static void DrawScrollBar(HDC dc) {
     FillRound(dc, th, 3, g_thumbDrag ? RGB(150, 150, 158) : RGB(110, 110, 118), RGB(110, 110, 118));
 }
 
+static bool IsPinnedItem(const Item& it) {
+    std::wstring key = it.kind + L"|" + it.value;
+    for (auto& k : g_pinned) if (k == key) return true;
+    return false;
+}
+
 static void DrawResults(HDC dc) {
     for (int row = 0; row < VisibleRows(); ++row) {
         int i = g_scroll + row;
@@ -1018,6 +1024,12 @@ static void DrawResults(HDC dc) {
         }
         DrawTextW(dc, g_results[i].name.c_str(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
+        if (IsPinnedItem(g_results[i])) {
+            SetTextColor(dc, RGB(255, 183, 77));
+            RECT pr2 = { r.right - 96, r.top, r.right - 62, r.bottom };
+            DrawTextW(dc, L"置顶", -1, &pr2, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+            SetTextColor(dc, RGB(210, 210, 210));
+        }
         SetTextColor(dc, RGB(210, 210, 210));
         {
             RECT tg = { r.right - 60, r.top, r.right - 8, r.bottom };
