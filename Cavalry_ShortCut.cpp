@@ -846,7 +846,6 @@ static void DrawPie(HDC dc) {
             SetTextAlign(dc, TA_RIGHT | TA_TOP);
             std::wstring k = g_slots[i].key.empty() ? std::to_wstring(i + 1) : g_slots[i].key;
             TextOutW(dc, r.right - 8, r.top + 6, k.c_str(), (int)k.size());
-            SetTextAlign(dc, TA_LEFT | TA_TOP);
         }
         SelectObject(dc, of);
         DeleteObject(f);
@@ -982,7 +981,7 @@ static void DrawResults(HDC dc) {
         SetTextColor(dc, kText);
         HFONT f = MakeFont(15);
         HGDIOBJ of = SelectObject(dc, f);
-        RECT ibox = { r.left + 30, r.top + 5, r.left + 46, r.top + 21 };
+        RECT ibox = { r.left + 30, (r.top + r.bottom) / 2 - 8, r.left + 46, (r.top + r.bottom) / 2 + 8 };
         if (g_results[i].kind == L"layer") DrawIcon(dc, g_results[i].value, ibox);
         RECT tr = r; tr.left += 52; tr.right -= 90;
         if (row < 6) {   // 只给当前可见的前 6 行编号
@@ -995,10 +994,11 @@ static void DrawResults(HDC dc) {
         DrawTextW(dc, g_results[i].name.c_str(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
         SetTextColor(dc, RGB(210, 210, 210));
-        SetTextAlign(dc, TA_RIGHT | TA_CENTER);
-        std::wstring tag = (g_results[i].kind == L"script") ? L"脚本" : L"图层";
-        TextOutW(dc, r.right - 12, (r.top + r.bottom) / 2, tag.c_str(), (int)tag.size());
-        SetTextAlign(dc, TA_LEFT | TA_TOP);
+        {
+            RECT tg = { r.right - 60, r.top, r.right - 8, r.bottom };
+            std::wstring tagv = (g_results[i].kind == L"script") ? L"脚本" : L"图层";
+            DrawTextW(dc, tagv.c_str(), -1, &tg, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+        }
 
         SelectObject(dc, of);
         DeleteObject(f);
@@ -1560,9 +1560,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_mode == M_SEARCH) {
             POINT mp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
             int hr = -1;
-            for (int rr = 0; rr < VisibleRows(); ++rr) {
-                RECT rrr = RowRect(rr);
-                if (mp.x >= rrr.left && mp.x < rrr.right && mp.y >= rrr.top && mp.y < rrr.bottom) { hr = g_scroll + rr; break; }
+            {
+                RECT first = RowRect(0);
+                RECT area = { first.left, first.top, first.right, first.bottom + 26 * (VisibleRows() - 1) + 6 };
+                if (mp.x >= area.left && mp.x < area.right && mp.y >= area.top && mp.y < area.bottom) {
+                    int idx = (mp.y - first.top) / 26;
+                    if (idx >= 0 && idx < VisibleRows()) hr = g_scroll + idx;
+                }
             }
             if (hr != g_hoverRow) { g_hoverRow = hr; InvalidateRect(hwnd, nullptr, FALSE); }
         }
