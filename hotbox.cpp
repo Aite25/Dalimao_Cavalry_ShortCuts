@@ -986,6 +986,7 @@ static void Paint(HWND hwnd) {
         DrawPanel(mem, title, g_query);
         DrawTabs(mem);
         DrawResults(mem);
+        DrawScrollBar(mem);
     } else {
         DrawSettings(mem);
     }
