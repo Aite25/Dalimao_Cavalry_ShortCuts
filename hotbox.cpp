@@ -1561,7 +1561,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         break;
     case WM_KEYDOWN: {
-        if (wp == VK_OEM_3) { PostMessageW(hwnd, WM_APP + 7, 0, 0); return 0; }   // ` 执行当前项
+        if (g_mode == M_PIE && (wp == VK_OEM_3 || wp == VK_SPACE)) { PostMessageW(hwnd, WM_APP + 7, 0, 0); return 0; }   // ` 或空格确认圆盘项
         if (g_mode == M_SEARCH) {
             bool c = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
             bool s = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
