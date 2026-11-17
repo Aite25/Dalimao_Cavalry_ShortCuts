@@ -1452,9 +1452,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         // 图标点击：按 pill 的左右半区判定，命中范围更大
         {
             RECT a = IconRect(1), b2 = IconRect(0);
-            RECT pill = { a.left - 8, a.top - 6, b2.right + 8, b2.bottom + 6 };
+            RECT pill = { b2.right - 110, a.top - 14, b2.right + 10, b2.bottom + 14 };   // 图标区放大，避免误落到扇区判定
             if (p.x >= pill.left && p.x < pill.right && p.y >= pill.top && p.y < pill.bottom) {
-                int mid = (a.left + b2.right) / 2;
+                int mid = (pill.left + pill.right) / 2;
                 if (p.x < mid) ShellExecuteW(nullptr, L"open", L"C:\\Windows\\explorer.exe", (L"\"" + ExeDir() + L"\\actions\"").c_str(), nullptr, SW_SHOWNORMAL);
                 else { g_mode = M_SETTINGS; g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); }
                 return 0;
