@@ -22,8 +22,13 @@
 #include <shellapi.h>
 #include <imm.h>
 #include <commctrl.h>
+#include <propidl.h>
+#include <gdiplus.h>
+#pragma comment(lib, "gdiplus.lib")
+using namespace Gdiplus;
 #include <string>
 #include <vector>
+#include <map>
 #include <algorithm>
 #include <cstdio>
 
@@ -51,7 +56,7 @@ static const COLORREF kPanelFill    = RGB(30, 30, 32);
 static const COLORREF kPanelBorder  = RGB(70, 70, 74);
 static const COLORREF kRowSel       = RGB(56, 119, 181);
 
-static const int kCenterR  = 36;
+static const int kCenterR  = 28;
 static const int kRectW    = 150;
 static const int kRectH    = 34;
 static const int kOffVert  = 118;
@@ -184,6 +189,52 @@ static void WriteFileUtf8(const std::wstring& path, const std::string& data) {
 static std::wstring ToLower(std::wstring s) {
     for (auto& c : s) c = (wchar_t)towlower(c);
     return s;
+}
+
+// ---------------------------------------------------------------- 图标（Add Layers 同款）
+static ULONG_PTR g_gdiplusToken = 0;
+static std::wstring g_iconDir;
+static std::map<std::wstring, Gdiplus::Image*> g_iconCache;
+
+static void Log(const std::string& s);
+
+static void InitIcons() {
+    GdiplusStartupInput si;
+    Gdiplus::GdiplusStartup(&g_gdiplusToken, &si, nullptr);
+
+    const wchar_t* cands[] = {
+        L"C:\\Program Files\\Cavalry\\assets\\Icons\\nodes",
+        L"E:\\Program Files\\Cavalry\\assets\\Icons\\nodes",
+        L"D:\\Program Files\\Cavalry\\assets\\Icons\\nodes",
+    };
+    for (auto c : cands) {
+        if (GetFileAttributesW(c) != INVALID_FILE_ATTRIBUTES) { g_iconDir = c; break; }
+    }
+    if (g_iconDir.empty()) Log("icons: not found");
+    else Log("icons: " + Narrow(g_iconDir));
+}
+
+static Gdiplus::Image* GetIcon(const std::wstring& type) {
+    if (g_iconDir.empty() || type.empty()) return nullptr;
+    auto it = g_iconCache.find(type);
+    if (it != g_iconCache.end()) return it->second;
+
+    std::wstring path = g_iconDir + L"\\" + type + L".png";
+    Gdiplus::Image* img = nullptr;
+    if (GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        img = Gdiplus::Image::FromFile(path.c_str());
+        if (img && img->GetLastStatus() != Gdiplus::Ok) { delete img; img = nullptr; }
+    }
+    g_iconCache[type] = img;
+    return img;
+}
+
+static void DrawIcon(HDC dc, const std::wstring& type, RECT box) {
+    Gdiplus::Image* img = GetIcon(type);
+    if (!img) return;
+    Gdiplus::Graphics g(dc);
+    g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+    g.DrawImage(img, box.left, box.top, box.right - box.left, box.bottom - box.top);
 }
 
 static void Log(const std::string& s) {
@@ -709,30 +760,28 @@ static void DrawPie(HDC dc) {
 
     // 中心圆 + 弧线
     int cx = CenterX(), cy = CenterY();
-    if (g_hover >= 0) {
-        RECT r = SectorRect(g_hover);
-        double tx = (r.left + r.right) / 2.0 - cx, ty = (r.top + r.bottom) / 2.0 - cy;
-        double ang = atan2(ty, tx);
-        int ar = kCenterR + 10;
-        HPEN pen = CreatePen(PS_SOLID, 4, kArcColor);
-        HGDIOBJ op = SelectObject(dc, pen);
-        HGDIOBJ ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-        for (int i = 0; i < 18; ++i) {
-            double a1 = ang - 0.45 + 0.9 * i / 18.0;
-            double a2 = ang - 0.45 + 0.9 * (i + 1) / 18.0;
-            MoveToEx(dc, cx + (int)(cos(a1) * ar), cy + (int)(sin(a1) * ar), nullptr);
-            LineTo(dc, cx + (int)(cos(a2) * ar), cy + (int)(sin(a2) * ar));
-        }
-        SelectObject(dc, ob); SelectObject(dc, op);
-        DeleteObject(pen);
-    }
+    // 中心圆 + 弧线：GDI+ 抗锯齿
+    {
+        Gdiplus::Graphics g(dc);
+        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        Gdiplus::SolidBrush ffill(Gdiplus::Color(255, 38, 38, 38));
+        Gdiplus::Pen bborder(Gdiplus::Color(255, 31, 31, 31), 2.0f);
+        g.FillEllipse(&ffill, cx - kCenterR, cy - kCenterR, kCenterR * 2, kCenterR * 2);
+        g.DrawEllipse(&bborder, cx - kCenterR, cy - kCenterR, kCenterR * 2, kCenterR * 2);
 
-    HBRUSH b = CreateSolidBrush(kCenterFill);
-    HPEN p = CreatePen(PS_SOLID, 3, kCenterBorder);
-    HGDIOBJ ob = SelectObject(dc, b), op = SelectObject(dc, p);
-    Ellipse(dc, cx - kCenterR, cy - kCenterR, cx + kCenterR, cy + kCenterR);
-    SelectObject(dc, ob); SelectObject(dc, op);
-    DeleteObject(b); DeleteObject(p);
+        if (g_hover >= 0) {
+            RECT r = SectorRect(g_hover);
+            double dx = (r.left + r.right) / 2.0 - cx;
+            double dy = (r.top + r.bottom) / 2.0 - cy;
+            double angDeg = atan2(dy, dx) * 180.0 / 3.14159265358979;
+            int ar = kCenterR - 8;
+            Gdiplus::Pen arcPen(Gdiplus::Color(255, 56, 119, 181), 3.0f);
+            arcPen.SetStartCap(Gdiplus::LineCapRound);
+            arcPen.SetEndCap(Gdiplus::LineCapRound);
+            g.DrawArc(&arcPen, (REAL)(cx - ar), (REAL)(cy - ar), (REAL)(ar * 2), (REAL)(ar * 2),
+                      (REAL)(angDeg - 28.0), (REAL)56.0);
+        }
+    }
 
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(150, 150, 150));
@@ -839,10 +888,12 @@ static void DrawResults(HDC dc) {
         SetTextColor(dc, kText);
         HFONT f = MakeFont(15);
         HGDIOBJ of = SelectObject(dc, f);
-        RECT tr = r; tr.left += 34; tr.right -= 90;
+        RECT ibox = { r.left + 30, r.top + 5, r.left + 46, r.top + 21 };
+        if (g_results[i].kind == L"layer") DrawIcon(dc, g_results[i].value, ibox);
+        RECT tr = r; tr.left += 52; tr.right -= 90;
         if (row < 6) {   // 只给当前可见的前 6 行编号
             SetTextColor(dc, hov ? RGB(225, 232, 245) : (sel ? RGB(200, 200, 210) : RGB(120, 120, 128)));
-            RECT nr = r; nr.left += 12; nr.right = nr.left + 20;
+            RECT nr = r; nr.left += 8; nr.right = nr.left + 22;
             std::wstring num = std::to_wstring(row + 1);
             DrawTextW(dc, num.c_str(), -1, &nr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
             SetTextColor(dc, kText);
@@ -1148,6 +1199,16 @@ static void LoadConfig() {
 // ---------------------------------------------------------------- 鼠标钩子（圆盘外部确认）
 static HHOOK g_mouseHook = nullptr;
 static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    static bool swallowUp = false;
+    if (nCode == HC_ACTION && wParam == WM_RBUTTONDOWN && g_main && IsWindowVisible(g_main) && g_mode == M_PIE) {
+        swallowUp = true;
+        PostMessageW(g_main, WM_APP + 8, 0, 0);
+        return 1;
+    }
+    if (nCode == HC_ACTION && wParam == WM_RBUTTONUP && swallowUp) {
+        swallowUp = false;
+        return 1;   // 抬起也吞掉，阻断 WM_CONTEXTMENU
+    }
     if (nCode == HC_ACTION && wParam == WM_LBUTTONDOWN && g_main && IsWindowVisible(g_main) && g_mode == M_PIE) {
         PostMessageW(g_main, WM_APP + 7, 0, 0);
     }
@@ -1308,6 +1369,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_TIMER:
         if (IsWindowVisible(hwnd) && g_mode == M_PIE) {
+            if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) { ShowWindow(hwnd, SW_HIDE); return 0; }   // 右键取消
             POINT cp; GetCursorPos(&cp);
             POINT cl = cp; ScreenToClient(hwnd, &cl);
             int hv = HitTestPie(cl);
@@ -1449,14 +1511,20 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_resizing) { g_resizing = false; ReleaseCapture(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
 
-        // 图标点击：按 pill 的左右半区判定，命中范围更大
+        // 图标点击：两个独立命中框（左=文件夹，右=设置）
         {
-            RECT a = IconRect(1), b2 = IconRect(0);
-            RECT pill = { a.left - 8, a.top - 6, b2.right + 8, b2.bottom + 6 };
-            if (p.x >= pill.left && p.x < pill.right && p.y >= pill.top && p.y < pill.bottom) {
-                int mid = (a.left + b2.right) / 2;
-                if (p.x < mid) ShellExecuteW(nullptr, L"open", L"C:\\Windows\\explorer.exe", (L"\"" + ExeDir() + L"\\actions\"").c_str(), nullptr, SW_SHOWNORMAL);
-                else { g_mode = M_SETTINGS; g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); }
+            RECT gear = IconRect(0);
+            RECT fold = IconRect(1);
+            InflateRect(&gear, 10, 14);
+            InflateRect(&fold, 10, 14);
+            if (p.x >= gear.left && p.x < gear.right && p.y >= gear.top && p.y < gear.bottom) {
+                g_mode = M_SETTINGS;
+                g_sel = 0;
+                InvalidateRect(hwnd, nullptr, TRUE);
+                return 0;
+            }
+            if (p.x >= fold.left && p.x < fold.right && p.y >= fold.top && p.y < fold.bottom) {
+                ShellExecuteW(nullptr, L"open", L"C:\\Windows\\explorer.exe", (L"\"" + ExeDir() + L"\\actions\"").c_str(), nullptr, SW_SHOWNORMAL);
                 return 0;
             }
         }
@@ -1617,6 +1685,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         return 0;
     }
+    case WM_APP + 8:
+        ShowWindow(hwnd, SW_HIDE);
+        return 0;
     case WM_APP + 7:
         if (g_mode == M_SEARCH) {
             ExecSelected();   // ` 执行搜索选中项
@@ -1705,6 +1776,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     ImmAssociateContext(hwnd, nullptr);   // 主窗口不吃输入法；输入框仍可用中文
     // 输入法保持启用：中文搜索需要它
 
+    InitIcons();
     LoadConfig();
     LoadIndex();
     LoadSectors();
@@ -1715,7 +1787,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     Log("hotkey " + Narrow(g_hotkeySpec) + " -> " + (hk ? "ok" : ("FAIL err=" + std::to_string(GetLastError()))));
 
     SetTimer(hwnd, 1, 25, nullptr);
-    g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, LowLevelMouseProc, GetModuleHandleW(nullptr), 0);
 
     WNDCLASSW cc = {};
     cc.lpfnWndProc = CatcherProc;
