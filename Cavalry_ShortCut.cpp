@@ -209,16 +209,16 @@ static RECT TabBoxRect(int i) {   // 第一行：1..4
     r.left = 24 + i * 62;
     r.top = 24;
     r.right = r.left + 62;
-    r.bottom = r.top + 30;
+    r.bottom = r.top + 24;
     return r;
 }
 
 static RECT TabModRect(int i) {   // 第二行：无 / Ctrl / Shift / Alt
     RECT r;
     r.left = 24 + i * 58;
-    r.top = 60;
+    r.top = 54;
     r.right = r.left + 58;
-    r.bottom = r.top + 30;
+    r.bottom = r.top + 24;
     return r;
 }
 
@@ -765,7 +765,7 @@ static RECT RowRect(int i) {
     r.left = p.left + 16;
     r.right = p.right - 34;
     r.top = p.top + 112 + i * 26;
-    r.bottom = r.top + 26;
+    r.bottom = r.top + 20;
     return r;
 }
 
@@ -776,7 +776,7 @@ static RECT TabRect(int i) {
     r.left = p.left + 16 + i * (w + gap);
     r.right = r.left + w;
     r.top = p.top + 32;
-    r.bottom = r.top + 26;
+    r.bottom = r.top + 20;
     return r;
 }
 
@@ -1022,7 +1022,7 @@ static RECT SettingRowRect(int i) {
     r.left = p.left + 232;
     r.right = p.right - 16;
     r.top = p.top + 112 + i * 26;
-    r.bottom = r.top + 26;
+    r.bottom = r.top + 20;
     return r;
 }
 
