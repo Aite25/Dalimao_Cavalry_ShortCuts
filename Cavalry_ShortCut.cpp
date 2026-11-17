@@ -1385,6 +1385,7 @@ static void SetHotkeyEnabled(bool on) {
 static bool IsCavalryWindow(HWND h) {
     DWORD pid = 0;
     GetWindowThreadProcessId(h, &pid);
+    if (pid == GetCurrentProcessId()) return TRUE;   // 排除热盒自己（文件名也含 cavalry）
     if (!pid) return false;
     HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
     if (!hProc) return false;
@@ -1399,13 +1400,15 @@ static bool IsCavalryWindow(HWND h) {
     CloseHandle(hProc);
     return ok;
 }
-static HWND g_cavalryWnd = nullptr;
+static bool g_cavalryAlive = true;
 
-static BOOL CALLBACK FindCavalryProc(HWND h, LPARAM lp) {
-    if (!IsWindowVisible(h)) return TRUE;
+struct CavProbe { bool found; bool visible; };
+
+static BOOL CALLBACK CavProbeProc(HWND h, LPARAM lp) {
+    CavProbe* pr = (CavProbe*)lp;
     DWORD pid = 0;
     GetWindowThreadProcessId(h, &pid);
-    if (!pid) return TRUE;
+    if (!pid || pid == GetCurrentProcessId()) return TRUE;
     HANDLE hp = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
     if (!hp) return TRUE;
     wchar_t buf[MAX_PATH] = {0};
@@ -1415,25 +1418,30 @@ static BOOL CALLBACK FindCavalryProc(HWND h, LPARAM lp) {
     if (!ok) return TRUE;
     std::wstring path(buf);
     for (auto& ch : path) ch = (wchar_t)towlower(ch);
-    if (path.find(L"cavalry") != std::wstring::npos) {
-        *(HWND*)lp = h;
-        return FALSE;
-    }
+    if (path.find(L"cavalry") == std::wstring::npos) return TRUE;
+    if (path.find(L"cavalry_shortcut") != std::wstring::npos) return TRUE;
+    pr->found = true;
+    if (IsWindowVisible(h) && !IsIconic(h)) { pr->visible = true; return FALSE; }
     return TRUE;
 }
 
-// 定时调用：Cavalry 关了就退出；最小化就隐藏热盒
+// 每 tick 调用：Cavalry 没有"可见且未最小化"的窗口 → 收起热盒
+static HWND g_cavalryWnd = nullptr;   // 呼出热盒时 Cavalry 的前台窗口
+
+static bool AnyCavalryVisible() {
+    CavProbe pr = { false, false };
+    EnumWindows(CavProbeProc, (LPARAM)&pr);
+    return pr.visible;
+}
+
 static void TickCavalryState(HWND hotbox) {
-    if (!g_cavalryWnd || !IsWindow(g_cavalryWnd)) {
-        HWND found = nullptr;
-        EnumWindows(FindCavalryProc, (LPARAM)&found);
-        g_cavalryWnd = found;
-    }
-    if (!g_cavalryWnd) {
+    if (!g_cavalryWnd || !IsWindow(g_cavalryWnd)) g_cavalryWnd = nullptr;
+    bool alive = g_cavalryWnd ? true : AnyCavalryVisible();
+    if (!alive) {
         if (IsWindowVisible(hotbox)) ShowWindow(hotbox, SW_HIDE);
         return;
     }
-    if (IsIconic(g_cavalryWnd)) {
+    if (g_cavalryWnd && (IsIconic(g_cavalryWnd) || !IsWindowVisible(g_cavalryWnd))) {
         if (IsWindowVisible(hotbox)) ShowWindow(hotbox, SW_HIDE);
     }
 }
@@ -1482,6 +1490,7 @@ static void ForceForeground(HWND hwnd) {
 
 static void ShowAtCursor(HWND hwnd) {
     g_mode = M_PIE;
+    { HWND fg0 = GetForegroundWindow(); if (fg0 && IsCavalryWindow(fg0)) g_cavalryWnd = fg0; }
     g_box = 0; g_mod = 0; LoadActive();   // 每次呼出都从"热盒1 · 无"开始
     g_ctrlUsed = true;   // 呼出用的 Ctrl 不算"单独按 Ctrl"，避免一开就切到 Ctrl 版
     g_query.clear();
