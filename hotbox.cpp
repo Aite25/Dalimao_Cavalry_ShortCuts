@@ -106,6 +106,7 @@ static const int kTabCount = 6;
 static HWND g_edit = nullptr;
 static HWND g_scrollbar = nullptr;
 static int g_scroll = 0;
+static int g_hoverRow = -1;
 static int g_maxScroll = 0;
 static bool g_thumbDrag = false;
 static int g_dragStartY = 0;
@@ -801,13 +802,21 @@ static void DrawResults(HDC dc) {
         if (i >= (int)g_results.size()) break;
         RECT r = RowRect(row);
         bool sel = (i == g_sel);
-        FillRound(dc, r, 6, sel ? kRowSel : RGB(38, 38, 40), sel ? kRowSel : RGB(50, 50, 54));
+        bool hov = (i == g_hoverRow);
+        FillRound(dc, r, 6, sel ? kRowSel : (hov ? RGB(45, 72, 105) : RGB(38, 38, 40)), sel ? kRowSel : (hov ? RGB(45, 72, 105) : RGB(50, 50, 54)));
 
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, kText);
         HFONT f = MakeFont(15);
         HGDIOBJ of = SelectObject(dc, f);
-        RECT tr = r; tr.left += 12; tr.right -= 90;
+        RECT tr = r; tr.left += 34; tr.right -= 90;
+        if (i < 6) {
+            SetTextColor(dc, RGB(120, 120, 128));
+            RECT nr = r; nr.left += 12; nr.right = nr.left + 20;
+            std::wstring num = std::to_wstring(i + 1);
+            DrawTextW(dc, num.c_str(), -1, &nr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            SetTextColor(dc, kText);
+        }
         DrawTextW(dc, g_results[i].name.c_str(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
         SetTextColor(dc, RGB(210, 210, 210));
@@ -889,6 +898,15 @@ static void DrawSettings(HDC dc) {
     // 左侧：迷你圆盘预览
     RECT pv = { p.left + 16, p.top + 44, p.left + 216, p.top + 250 };
     DrawMiniPie(dc, pv, g_sel);
+    {   // 右上角关闭按钮
+        RECT xr = IconRect(0);
+        HPEN pen = CreatePen(PS_SOLID, 1, RGB(180, 180, 185));
+        HGDIOBJ op = SelectObject(dc, pen);
+        MoveToEx(dc, xr.left + 4, xr.top + 4, nullptr); LineTo(dc, xr.right - 4, xr.bottom - 4);
+        MoveToEx(dc, xr.right - 4, xr.top + 4, nullptr); LineTo(dc, xr.left + 4, xr.bottom - 4);
+        SelectObject(dc, op);
+        DeleteObject(pen);
+    }
 
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(150, 150, 150));
@@ -904,7 +922,8 @@ static void DrawSettings(HDC dc) {
     for (int i = 0; i < 8; ++i) {
         RECT r = SettingRowRect(i);
         bool sel = (i == g_sel);
-        FillRound(dc, r, 6, sel ? kRowSel : RGB(38, 38, 40), sel ? kRowSel : RGB(50, 50, 54));
+        bool hov = (i == g_hoverRow);
+        FillRound(dc, r, 6, sel ? kRowSel : (hov ? RGB(45, 72, 105) : RGB(38, 38, 40)), sel ? kRowSel : (hov ? RGB(45, 72, 105) : RGB(50, 50, 54)));
 
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, kText);
@@ -1211,6 +1230,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         ReleaseCapture();
         return 0;
     case WM_MOUSEMOVE: {
+        if (g_mode == M_SEARCH) {
+            POINT mp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+            int hr = -1;
+            for (int rr = 0; rr < 7; ++rr) {
+                RECT rrr = RowRect(rr);
+                if (mp.x >= rrr.left && mp.x < rrr.right && mp.y >= rrr.top && mp.y < rrr.bottom) { hr = g_scroll + rr; break; }
+            }
+            if (hr != g_hoverRow) { g_hoverRow = hr; InvalidateRect(hwnd, nullptr, FALSE); }
+        }
         if (g_dragging) {
             POINT pt; GetCursorPos(&pt);
             SetWindowPos(hwnd, HWND_TOP, pt.x - g_dragOffset.x, pt.y - g_dragOffset.y, 0, 0,
@@ -1255,11 +1283,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_LBUTTONUP: {
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
 
-        // 右上角两个图标：文件夹 / 设置
-        for (int k = 0; k < 2; ++k) {
-            RECT ir = IconRect(k);
-            if (p.x >= ir.left && p.x < ir.right && p.y >= ir.top && p.y < ir.bottom) {
-                if (k == 1) OpenPath(ExeDir() + L"\\actions");   // 左：文件夹
+        // 图标点击：按 pill 的左右半区判定，命中范围更大
+        {
+            RECT a = IconRect(1), b2 = IconRect(0);
+            RECT pill = { a.left - 8, a.top - 6, b2.right + 8, b2.bottom + 6 };
+            if (p.x >= pill.left && p.x < pill.right && p.y >= pill.top && p.y < pill.bottom) {
+                int mid = (a.left + b2.right) / 2;
+                if (p.x < mid) OpenPath(ExeDir() + L"\\actions");
                 else { g_mode = M_SETTINGS; g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); }
                 return 0;
             }
