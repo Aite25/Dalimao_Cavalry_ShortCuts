@@ -75,7 +75,12 @@ struct Slot {
     std::wstring key;     // 扇区热键（单个字符，可空）
     bool used = false;
 };
-static Slot g_slots[8];
+static Slot g_slots[8];          // 当前激活的一组
+static Slot g_store[16][8];      // [box*4+mod][slot]
+static int  g_box = 0;           // 0..3（热盒 1..4）
+static int  g_mod = 0;
+static bool g_ctrlUsed = false;   // Ctrl 是否被当作组合键使用           // 0=无 1=Ctrl 2=Shift 3=Alt
+
 
 struct Item {
     std::wstring name;
@@ -191,6 +196,75 @@ static std::wstring ToLower(std::wstring s) {
     return s;
 }
 
+
+static void Log(const std::string& s);
+static void FillRound(HDC dc, RECT r, int radius, COLORREF fill, COLORREF border);
+static HFONT MakeFont(int px, bool bold = false);
+static void SaveActive();
+static void LoadActive();
+
+// ---------------------------------------------------------------- 顶部页签（热盒 1-4 / 修饰键）
+static RECT TabBoxRect(int i) {   // 第一行：1..4
+    RECT r;
+    r.left = 24 + i * 62;
+    r.top = 24;
+    r.right = r.left + 62;
+    r.bottom = r.top + 24;
+    return r;
+}
+
+static RECT TabModRect(int i) {   // 第二行：无 / Ctrl / Shift / Alt
+    RECT r;
+    r.left = 24 + i * 58;
+    r.top = 54;
+    r.right = r.left + 58;
+    r.bottom = r.top + 24;
+    return r;
+}
+
+static void SwitchSet(int box, int mod) {
+    SaveActive();
+    g_box = (box >= 0 && box < 4) ? box : g_box;
+    g_mod = (mod >= 0 && mod < 4) ? mod : g_mod;
+    LoadActive();
+    Log("set box=" + std::to_string(g_box + 1) + " mod=" + std::to_string(g_mod));
+}
+
+static void DrawPieTabs(HDC dc) {
+    const wchar_t* boxLabels[4] = { L"Ctrl+1", L"Ctrl+2", L"Ctrl+3", L"Ctrl+4" };
+    const wchar_t* modLabels[4] = { L"无", L"Ctrl", L"Shift", L"Alt" };
+
+    for (int i = 0; i < 4; ++i) {
+        RECT r = TabBoxRect(i);
+        bool on = (i == g_box);
+        { HBRUSH tb = CreateSolidBrush(on ? RGB(52, 54, 60) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
+          HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(52, 54, 60) : RGB(36, 36, 40)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
+          Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
+        HFONT f = MakeFont(14, on);
+        HGDIOBJ of = SelectObject(dc, f);
+        DrawTextW(dc, boxLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(dc, of);
+        DeleteObject(f);
+        if (on) { RECT u = { r.left + 8, r.bottom - 2, r.right - 8, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
+    }
+    for (int i = 0; i < 4; ++i) {
+        RECT r = TabModRect(i);
+        bool on = (i == g_mod);
+        { HBRUSH tb = CreateSolidBrush(on ? RGB(52, 54, 60) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
+          HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(52, 54, 60) : RGB(36, 36, 40)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
+          Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
+        HFONT f = MakeFont(13, on);
+        HGDIOBJ of = SelectObject(dc, f);
+        DrawTextW(dc, modLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(dc, of);
+        DeleteObject(f);
+        if (on) { RECT u = { r.left + 4, r.bottom - 2, r.right - 4, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
+    }
+}
 // ---------------------------------------------------------------- 图标（Add Layers 同款）
 static ULONG_PTR g_gdiplusToken = 0;
 static std::wstring g_iconDir;
@@ -359,7 +433,6 @@ static void RunItem(const Item& it) {
     g_query.clear();
 }
 
-static HFONT MakeFont(int px, bool bold = false);
 static void SyncEditFromMode();
 static void UpdateScrollInfo();
 
@@ -523,65 +596,86 @@ static std::wstring JsonGetStr(const std::string& obj, const char* key) {
 }
 
 static void SaveSectors();
+static void LoadActive() {
+    int idx = g_box * 4 + g_mod;
+    for (int i = 0; i < 8; ++i) g_slots[i] = g_store[idx][i];
+}
+
+static void SaveActive() {
+    int idx = g_box * 4 + g_mod;
+    for (int i = 0; i < 8; ++i) g_store[idx][i] = g_slots[i];
+}
+
 static void LoadSectors() {
+    for (int b = 0; b < 16; ++b) for (int i = 0; i < 8; ++i) g_store[b][i] = Slot();
+
     std::wstring path = ExeDir() + L"\\Cavalry_ShortCut.json";
     std::string raw = ReadFileUtf8(path);
 
-    if (!raw.empty()) {
-        // 极简解析：按 "name" 分段取 name/kind/value/key
-        size_t pos = 0;
-        int idx = 0;
-        while (idx < 8 && (pos = raw.find("\"name\"", pos)) != std::string::npos) {
-            size_t segEnd = raw.find("}", pos);
-            std::string seg = raw.substr(pos, segEnd == std::string::npos ? std::string::npos : segEnd - pos);
-            g_slots[idx].name = JsonGetStr(seg, "name");
-            g_slots[idx].kind = JsonGetStr(seg, "kind");
-            g_slots[idx].value = JsonGetStr(seg, "value");
-            g_slots[idx].key = JsonGetStr(seg, "key");
-            g_slots[idx].used = !g_slots[idx].value.empty();
-            if (g_slots[idx].kind.empty()) g_slots[idx].kind = L"script";
-            ++idx;
-            pos = segEnd == std::string::npos ? raw.size() : segEnd;
-        }
-        return;
+    std::vector<std::string> segs;
+    size_t pos = 0;
+    while ((pos = raw.find("\"name\"", pos)) != std::string::npos) {
+        size_t segEnd = raw.find("}", pos);
+        segs.push_back(raw.substr(pos, segEnd == std::string::npos ? std::string::npos : segEnd - pos));
+        pos = (segEnd == std::string::npos) ? raw.size() : segEnd;
     }
 
-    // 没有配置 → 用 actions 目录生成默认绑定
-    std::wstring dir = ExeDir() + L"\\actions";
-    WIN32_FIND_DATAW fd = {};
-    HANDLE h = FindFirstFileW((dir + L"\\*.js").c_str(), &fd);
-    std::vector<Item> scripts;
-    if (h != INVALID_HANDLE_VALUE) {
-        do {
-            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
-            std::wstring name = fd.cFileName;
-            Item it;
-            it.name = name.substr(0, name.find_last_of(L'.'));
-            it.kind = L"script";
-            it.value = name;
-            scripts.push_back(it);
-        } while (FindNextFileW(h, &fd));
-        FindClose(h);
+    int total = (int)segs.size();
+    for (int i = 0; i < total && i < 128; ++i) {
+        Slot s;
+        s.name = JsonGetStr(segs[i], "name");
+        s.kind = JsonGetStr(segs[i], "kind");
+        s.value = JsonGetStr(segs[i], "value");
+        s.key = JsonGetStr(segs[i], "key");
+        s.used = !s.value.empty();
+        if (s.kind.empty()) s.kind = L"script";
+        g_store[i / 8][i % 8] = s;
     }
-    std::sort(scripts.begin(), scripts.end(), [](const Item& a, const Item& b) { return a.name < b.name; });
-    for (size_t i = 0; i < scripts.size() && i < 8; ++i) {
-        g_slots[i].name = scripts[i].name;
-        g_slots[i].kind = scripts[i].kind;
-        g_slots[i].value = scripts[i].value;
-        g_slots[i].key = std::to_wstring(i + 1);
-        g_slots[i].used = true;
+    if (total == 8) {   // 旧格式：复制到其余 15 组
+        /* 各组独立：不复制默认绑定 */
     }
-    SaveSectors();
+
+    if (total == 0) {   // 空配置：用 actions 目录生成默认绑定
+        std::wstring dir = ExeDir() + L"\\actions";
+        WIN32_FIND_DATAW fd = {};
+        HANDLE h = FindFirstFileW((dir + L"\\*.js").c_str(), &fd);
+        std::vector<std::pair<std::wstring, std::wstring>> found;
+        if (h != INVALID_HANDLE_VALUE) {
+            do {
+                if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+                std::wstring nm = fd.cFileName;
+                found.push_back({ nm.substr(0, nm.find_last_of(L'.')), nm });
+            } while (FindNextFileW(h, &fd));
+            FindClose(h);
+        }
+        std::sort(found.begin(), found.end());
+        for (size_t i = 0; i < found.size() && i < 8; ++i) {
+            g_store[0][i].name = found[i].first;
+            g_store[0][i].kind = L"script";
+            g_store[0][i].value = found[i].second;
+            g_store[0][i].key = std::to_wstring(i + 1);
+            g_store[0][i].used = true;
+        }
+        /* 各组独立：不复制默认绑定 */
+        SaveSectors();
+    }
+    LoadActive();
 }
 
+static void SaveSectors();
+
 static void SaveSectors() {
-    std::string out = "{\n  \"sectors\": [\n";
-    for (int i = 0; i < 8; ++i) {
-        out += "    {\"name\":\"" + EscapeJson(Narrow(g_slots[i].name)) + "\", "
-               "\"kind\":\"" + EscapeJson(Narrow(g_slots[i].kind)) + "\", "
-               "\"value\":\"" + EscapeJson(Narrow(g_slots[i].value)) + "\", "
-               "\"key\":\"" + EscapeJson(Narrow(g_slots[i].key)) + "\"}";
-        out += (i < 7) ? ",\n" : "\n";
+    SaveActive();
+    std::string out = "{\n  \"sets\": [\n";
+    for (int b = 0; b < 16; ++b) {
+        out += "    [\n";
+        for (int i = 0; i < 8; ++i) {
+            const Slot& s = g_store[b][i];
+            out += "      {\"name\":\"" + EscapeJson(Narrow(s.name)) + "\", \"kind\":\"" + EscapeJson(Narrow(s.kind)) +
+                   "\", \"value\":\"" + EscapeJson(Narrow(s.value)) + "\", \"key\":\"" + EscapeJson(Narrow(s.key)) + "\"}";
+            out += (i < 7) ? ",\n" : "\n";
+        }
+        out += (b < 15) ? "    ],\n" : "    ]\n";
     }
     out += "  ]\n}\n";
     WriteFileUtf8(ExeDir() + L"\\Cavalry_ShortCut.json", out);
@@ -671,7 +765,7 @@ static RECT RowRect(int i) {
     r.left = p.left + 16;
     r.right = p.right - 34;
     r.top = p.top + 112 + i * 26;
-    r.bottom = r.top + 26;
+    r.bottom = r.top + 20;
     return r;
 }
 
@@ -682,7 +776,7 @@ static RECT TabRect(int i) {
     r.left = p.left + 16 + i * (w + gap);
     r.right = r.left + w;
     r.top = p.top + 32;
-    r.bottom = r.top + 26;
+    r.bottom = r.top + 20;
     return r;
 }
 
@@ -734,7 +828,7 @@ static void DrawPie(HDC dc) {
     for (int i = 0; i < 8; ++i) {
         RECT r = SectorRect(i);
         bool sel = (i == g_hover);
-        FillRound(dc, r, 8, sel ? kSectorSel : kSectorFill, kSectorBorder);
+        FillRound(dc, r, 8, sel ? kSectorSel : kSectorFill, sel ? kRowSel : kSectorBorder);   // 选中：灰底 + 蓝框
 
         SetBkMode(dc, TRANSPARENT);
         HFONT f = MakeFont(15);
@@ -928,7 +1022,7 @@ static RECT SettingRowRect(int i) {
     r.left = p.left + 232;
     r.right = p.right - 16;
     r.top = p.top + 112 + i * 26;
-    r.bottom = r.top + 26;
+    r.bottom = r.top + 20;
     return r;
 }
 
@@ -1106,6 +1200,7 @@ static void Paint(HWND hwnd) {
         DrawSettings(mem);
     }
 
+    if (g_mode == M_PIE) DrawPieTabs(mem);
     if (g_mode != M_SETTINGS) DrawTopIcons(mem);   // 设置页右上角是关闭按钮
     if (g_mode != M_PIE) {   // 仅搜索/设置页显示拖拽条
         RECT pr = PanelRect();
@@ -1155,6 +1250,8 @@ static bool ParseHotkey(const std::wstring& spec, UINT& mods, UINT& vk) {
         if (low == L"alt")                       { mods |= MOD_ALT;     continue; }
         if (low == L"shift")                     { mods |= MOD_SHIFT;   continue; }
         if (low == L"win")                       { mods |= MOD_WIN;     continue; }
+        if (token == L"`") { vk = VK_OEM_3; continue; }   // 反引号
+        if (token == L" " || token == L"space") { vk = VK_SPACE; continue; }
         if (token.size() == 1) {
             wchar_t c = (wchar_t)towupper(token[0]);
             if ((c >= L'A' && c <= L'Z') || (c >= L'0' && c <= L'9')) { vk = (UINT)c; continue; }
@@ -1219,6 +1316,17 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
 // 圆盘用色键透明，透明像素的点击会穿透到下层窗口。为了能收到"热盒外部"的左键，
 // 额外铺一层几乎全透明（alpha=1）的全屏窗口，只负责接收点击。
 static HWND g_catcher = nullptr;
+
+// 按需注册热键：只有 Cavalry（或热盒自己）在前台时才占用 Ctrl+`，其它应用不受影响
+static HWND g_msgWndGlobal = nullptr;
+static bool g_hotkeyOn = false;
+
+static void SetHotkeyEnabled(bool on) {
+    if (on == g_hotkeyOn || !g_msgWndGlobal) return;
+    if (on) RegisterHotKey(g_msgWndGlobal, 1, g_hotkeyMods, g_hotkeyVk);
+    else    UnregisterHotKey(g_msgWndGlobal, 1);
+    g_hotkeyOn = on;
+}
 static bool IsCavalryWindow(HWND h) {
     DWORD pid = 0;
     GetWindowThreadProcessId(h, &pid);
@@ -1280,6 +1388,8 @@ static void ForceForeground(HWND hwnd) {
 
 static void ShowAtCursor(HWND hwnd) {
     g_mode = M_PIE;
+    g_box = 0; g_mod = 0; LoadActive();   // 每次呼出都从"热盒1 · 无"开始
+    g_ctrlUsed = true;   // 呼出用的 Ctrl 不算"单独按 Ctrl"，避免一开就切到 Ctrl 版
     g_query.clear();
     g_sel = 0;
     g_hover = -1;
@@ -1368,6 +1478,11 @@ static void OpenPath(const std::wstring& path) {
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_TIMER:
+        {   // 仅当 Cavalry 或热盒自己在前台时才占用热键
+            HWND fg = GetForegroundWindow();
+            bool want = IsCavalryWindow(fg) || fg == hwnd || (g_main && fg == g_main) || (g_edit && fg == g_edit);
+            if (want != g_hotkeyOn) SetHotkeyEnabled(want);
+        }
         if (IsWindowVisible(hwnd) && g_mode == M_PIE) {
             if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) { ShowWindow(hwnd, SW_HIDE); return 0; }   // 右键取消
             POINT cp; GetCursorPos(&cp);
@@ -1511,6 +1626,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_resizing) { g_resizing = false; ReleaseCapture(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
 
+        // 页签点击（圆盘模式）
+        if (g_mode == M_PIE) {
+            for (int i = 0; i < 4; ++i) {
+                RECT br = TabBoxRect(i);
+                if (p.x >= br.left && p.x < br.right && p.y >= br.top && p.y < br.bottom) { SwitchSet(i, g_mod); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+                RECT mr = TabModRect(i);
+                if (p.x >= mr.left && p.x < mr.right && p.y >= mr.top && p.y < mr.bottom) { SwitchSet(g_box, i); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            }
+        }
         // 图标点击：两个独立命中框（左=文件夹，右=设置）
         {
             RECT gear = IconRect(0);
@@ -1620,13 +1744,47 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         return 0;
     }
-    case WM_MOUSEWHEEL:
+    case WM_MOUSEWHEEL: {
+        POINT mp; GetCursorPos(&mp); ScreenToClient(hwnd, &mp);
+        int delta = GET_WHEEL_DELTA_WPARAM(wp);
+        if (g_mode == M_PIE) {
+            bool onModRow = false;
+            for (int i = 0; i < 4; ++i) {
+                RECT mr = TabModRect(i);
+                if (mp.x >= mr.left && mp.x < mr.right && mp.y >= mr.top && mp.y < mr.bottom) {
+                    SwitchSet(g_box, (g_mod + (delta > 0 ? 3 : 1)) % 4); InvalidateRect(hwnd, nullptr, TRUE); return 0;
+                }
+            }
+            (void)onModRow;
+            SwitchSet((g_box + (delta > 0 ? 3 : 1)) % 4, g_mod);   // 其它位置：滚轮切热盒
+            InvalidateRect(hwnd, nullptr, TRUE);
+            return 0;
+        }
         if (g_mode == M_SEARCH) {
-            g_scroll -= (GET_WHEEL_DELTA_WPARAM(wp) / WHEEL_DELTA) * 3;
+            for (int i = 0; i < kTabCount; ++i) {
+                RECT tr = TabRect(i);
+                if (mp.x >= tr.left && mp.x < tr.right && mp.y >= tr.top && mp.y < tr.bottom) {
+                    g_tab = (g_tab + (delta > 0 ? kTabCount - 1 : 1)) % kTabCount;
+                    g_sel = 0; g_scroll = 0; UpdateResults(); InvalidateRect(hwnd, nullptr, TRUE); return 0;
+                }
+            }
+            g_scroll -= (delta / WHEEL_DELTA) * 3;
             UpdateScrollInfo();
             InvalidateRect(hwnd, nullptr, FALSE);
             return 0;
         }
+        break;
+    }
+    case WM_KEYUP:
+        if (g_mode == M_PIE && wp == VK_CONTROL) {
+            if (!g_ctrlUsed) SwitchSet(g_box, (g_mod == 1) ? 0 : 1);
+            g_ctrlUsed = false;
+            InvalidateRect(hwnd, nullptr, TRUE);
+            return 0;
+        }
+        break;
+    case WM_SYSKEYDOWN:
+        if (g_mode == M_PIE && wp == VK_MENU) { SwitchSet(g_box, (g_mod == 3) ? 0 : 3); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         break;
     case WM_KEYDOWN: {
         if (g_mode == M_PIE && (wp == VK_OEM_3 || wp == VK_SPACE)) { PostMessageW(hwnd, WM_APP + 7, 0, 0); return 0; }   // ` 或空格确认圆盘项
@@ -1639,6 +1797,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_mode == M_SEARCH && (GetKeyState(VK_CONTROL) & 0x8000) && (wp == 'A')) {
             if (g_edit) { SetFocus(g_edit); SendMessageW(g_edit, EM_SETSEL, (WPARAM)0, (LPARAM)-1); }
             return 0;   // 吞掉，避免系统提示音
+        }
+        if (g_mode == M_PIE) {
+            if ((GetKeyState(VK_CONTROL) & 0x8000) && wp >= '1' && wp <= '4') { g_ctrlUsed = true; SwitchSet(wp - '1', g_mod); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            if (wp == VK_CONTROL) { g_ctrlUsed = false; return 0; }   // Ctrl：等松开时再判断是否单独按
+            if (wp == VK_SHIFT)   { SwitchSet(g_box, (g_mod == 2) ? 0 : 2); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            if (wp == VK_MENU)    { SwitchSet(g_box, (g_mod == 3) ? 0 : 3); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         }
         if (wp == VK_ESCAPE) {
             if (g_mode == M_SEARCH && g_bindSlot >= 0) { g_mode = M_SETTINGS; g_bindSlot = -1; }
@@ -1720,7 +1884,14 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         ShowAtCursor(hwnd);
         return 0;
     case WM_HOTKEY:
-        if (wp == HOTKEY_TOGGLE) ToggleWindow(g_main ? g_main : hwnd);
+        if (wp == HOTKEY_TOGGLE) {
+            HWND target = g_main ? g_main : hwnd;
+            bool visible = IsWindowVisible(target);
+            HWND fg = GetForegroundWindow();
+            bool onCavalry = IsCavalryWindow(fg) || fg == target || fg == g_edit;
+            if (visible) { ShowWindow(target, SW_HIDE); }          // 已打开：热键=收起
+            else if (onCavalry) { ShowAtCursor(target); }           // 仅在 Cavalry 前台时呼出
+        }
         return 0;
     case WM_COMMAND: {
         if (LOWORD(wp) == ID_EDIT && HIWORD(wp) == EN_CHANGE) {
@@ -1781,12 +1952,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     LoadIndex();
     LoadSectors();
 
-    HWND msgWnd = CreateWindowExW(0, L"CavalryShortCut", L"", 0, 0, 0, 0, 0,
-                                  HWND_MESSAGE, nullptr, inst, nullptr);
-    BOOL hk = RegisterHotKey(msgWnd ? msgWnd : hwnd, HOTKEY_TOGGLE, g_hotkeyMods, g_hotkeyVk);
+    HWND msgWnd = CreateWindowExW(0, L"CavalryShortCut", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, inst, nullptr);
+    g_msgWndGlobal = msgWnd;
+    BOOL hk = TRUE;   // 热键改为按需注册（仅 Cavalry 前台）
     Log("hotkey " + Narrow(g_hotkeySpec) + " -> " + (hk ? "ok" : ("FAIL err=" + std::to_string(GetLastError()))));
 
-    SetTimer(hwnd, 1, 25, nullptr);
+    SetTimer(hwnd, 1, 5, nullptr);   // 5ms
 
     WNDCLASSW cc = {};
     cc.lpfnWndProc = CatcherProc;

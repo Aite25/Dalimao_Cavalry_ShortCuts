@@ -1,4 +1,4 @@
-# Dalimao Cavalry ShortCuts — Cavalry 径向热盒
+﻿# Dalimao Cavalry ShortCuts — Cavalry 径向热盒
 
 给 **Cavalry 2.8.x** 用的外挂快捷面板：按 `Alt+Q` 在鼠标位置弹出一个 **8 扇区径向菜单**，
 点一下就在 Cavalry 里执行脚本或新建图层。灵感与配色参考 AE 插件 `DalimaoShortcuts`。
@@ -22,6 +22,7 @@
 | 热更新 | `actions/*.js` 在**点击时**才读取，改完存盘立即生效，不用重启 |
 | 可拖动/缩放 | 中键拖动移动；右/下边缘拖动改变面板尺寸（仅搜索/设置页） |
 | 托盘无关 | 右键热盒直接隐藏；不需托盘图标 |
+| 16 组绑定 | 4 个热盒 × 4 种修饰键（无/Ctrl/Shift/Alt）；`Ctrl+1`~`Ctrl+4` 切热盒，滚轮也可切 |
 
 ---
 
@@ -77,7 +78,7 @@ Cavalry_ShortCut.json   ← 8 个扇区的绑定
 
 | 按键 | 作用 |
 |---|---|
-| `Alt+Q` | 在鼠标位置呼出 / 收起（可在 `.ini` 改） |
+| `Ctrl + 反引号` | 在鼠标位置呼出 / 收起（仅 Cavalry 前台时生效，可在 `.ini` 改） |
 
 ### 圆盘
 
@@ -118,7 +119,7 @@ Cavalry_ShortCut.json   ← 8 个扇区的绑定
 
 ```ini
 ; 呼出热键（支持 Ctrl/Alt/Shift/Win + A-Z / 0-9 / F1-F24）
-hotkey=Alt+Q
+hotkey=Ctrl+`
 
 ; ime=off 输入框禁用输入法（英文字母直接输入，推荐）
 ; ime=on  输入框启用输入法（可打拼音搜中文，但英文会被合成）
