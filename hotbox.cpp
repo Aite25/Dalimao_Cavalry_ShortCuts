@@ -1152,6 +1152,30 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
     }
     return CallNextHookEx(g_mouseHook, nCode, wParam, lParam);
 }
+
+// ---------------------------------------------------------------- 点击捕获层
+// 圆盘用色键透明，透明像素的点击会穿透到下层窗口。为了能收到"热盒外部"的左键，
+// 额外铺一层几乎全透明（alpha=1）的全屏窗口，只负责接收点击。
+static HWND g_catcher = nullptr;
+
+static LRESULT CALLBACK CatcherProc(HWND h, UINT m, WPARAM w, LPARAM l) {
+    if (m == WM_LBUTTONDOWN) {
+        if (g_main) PostMessageW(g_main, WM_APP + 7, 0, 0);
+        return 0;
+    }
+    return DefWindowProcW(h, m, w, l);
+}
+
+static void ShowCatcher(bool show) {
+    if (!g_catcher) return;
+    if (show) {
+        int vx = GetSystemMetrics(SM_XVIRTUALSCREEN), vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        int vw = GetSystemMetrics(SM_CXVIRTUALSCREEN), vh = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+        SetWindowPos(g_catcher, HWND_TOPMOST, vx, vy, vw, vh, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+    } else {
+        ShowWindow(g_catcher, SW_HIDE);
+    }
+}
 // ---------------------------------------------------------------- 窗口
 #define HOTKEY_TOGGLE 1
 #define IDM_ACTIONS 3003
@@ -1196,6 +1220,7 @@ static void ShowAtCursor(HWND hwnd) {
     if (y + g_winH > work.bottom) y = work.bottom - g_winH;
 
     SetWindowPos(hwnd, HWND_TOP, x, y, g_winW, g_winH, SWP_SHOWWINDOW);
+    ShowCatcher(g_mode == M_PIE);
     ForceForeground(hwnd);
     InvalidateRect(hwnd, nullptr, TRUE);
 }
@@ -1280,7 +1305,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 bool outside = (cl.x < 0 || cl.y < 0 || cl.x >= g_winW || cl.y >= g_winH);
                 if (g_hover >= 0 && g_slots[g_hover].used) {
                     Item it{ g_slots[g_hover].name, g_slots[g_hover].kind, g_slots[g_hover].value };
-                    RunItem(it);
+                    RunItem(it); ShowCatcher(false);
                 } else if (outside) {
                     ShowWindow(hwnd, SW_HIDE);
                 }
@@ -1313,7 +1338,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE && !g_inMenu && !g_resizing && !g_thumbDrag) {
-            if (g_mode == M_SEARCH) ShowWindow(hwnd, SW_HIDE);   // 搜索面板：点外面关闭；圆盘交给定时器
+            if (g_mode == M_SEARCH) { ShowWindow(hwnd, SW_HIDE); ShowCatcher(false); }   // 搜索面板：点外面关闭
             else if (g_mode == M_SETTINGS) ShowWindow(hwnd, SW_HIDE);
         }
         return 0;
@@ -1672,6 +1697,15 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
 
     SetTimer(hwnd, 1, 25, nullptr);
     g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, LowLevelMouseProc, GetModuleHandleW(nullptr), 0);
+
+    WNDCLASSW cc = {};
+    cc.lpfnWndProc = CatcherProc;
+    cc.hInstance = inst;
+    cc.lpszClassName = L"CavalryHotboxCatcher";
+    RegisterClassW(&cc);
+    g_catcher = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST, L"CavalryHotboxCatcher", L"", WS_POPUP,
+                                0, 0, 100, 100, nullptr, nullptr, inst, nullptr);
+    if (g_catcher) SetLayeredWindowAttributes(g_catcher, 0, 1, LWA_ALPHA);   // 几乎全透明但能收点击
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
