@@ -1359,6 +1359,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_TIMER:
         if (IsWindowVisible(hwnd) && g_mode == M_PIE) {
+            if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) { ShowWindow(hwnd, SW_HIDE); return 0; }   // 右键取消
             POINT cp; GetCursorPos(&cp);
             POINT cl = cp; ScreenToClient(hwnd, &cl);
             int hv = HitTestPie(cl);
