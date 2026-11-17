@@ -1039,7 +1039,7 @@ static void Paint(HWND hwnd) {
     }
 
     if (g_mode != M_SETTINGS) DrawTopIcons(mem);   // 设置页右上角是关闭按钮
-    {   // 拖拽条（不透明，从内部命中）
+    if (g_mode != M_PIE) {   // 仅搜索/设置页显示拖拽条
         RECT pr = PanelRect();
         HBRUSH gb = CreateSolidBrush(RGB(46, 46, 50));
         RECT b1 = { pr.left + 8, pr.bottom - 12, pr.right - 8, pr.bottom - 5 };
@@ -1280,8 +1280,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         POINT cp; GetCursorPos(&cp); ScreenToClient(hwnd, &cp);
         RECT pc = PanelRect();
         int ed = 0;
-        if (cp.x >= pc.right - 14) ed |= 1;
-        if (cp.y >= pc.bottom - 14) ed |= 2;
+        if (g_mode != M_PIE && cp.x >= pc.right - 14) ed |= 1;
+        if (g_mode != M_PIE && cp.y >= pc.bottom - 14) ed |= 2;
         if (ed) { SetCursor(LoadCursor(nullptr, (ed == 3) ? IDC_SIZENWSE : (ed == 1 ? IDC_SIZEWE : IDC_SIZENS))); return TRUE; }
         break;
     }
@@ -1332,8 +1332,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         {
             int ex = (int)GET_X_LPARAM(lp), ey = (int)GET_Y_LPARAM(lp);
             int edges = 0;
-            if (ex >= PanelRect().right - 14) edges |= 1;
-            if (ey >= PanelRect().bottom - 14) edges |= 2;
+            if (g_mode != M_PIE && ex >= PanelRect().right - 14) edges |= 1;
+            if (g_mode != M_PIE && ey >= PanelRect().bottom - 14) edges |= 2;
             if (edges) {
                 g_resizing = true;
                 g_resizeEdges = edges;
@@ -1366,6 +1366,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         break;
     }
     case WM_LBUTTONUP: {
+        if (g_resizing) { g_resizing = false; ReleaseCapture(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
 
         // 图标点击：按 pill 的左右半区判定，命中范围更大
