@@ -1955,7 +1955,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     BOOL hk = TRUE;   // 热键改为按需注册（仅 Cavalry 前台）
     Log("hotkey " + Narrow(g_hotkeySpec) + " -> " + (hk ? "ok" : ("FAIL err=" + std::to_string(GetLastError()))));
 
-    SetTimer(hwnd, 1, 25, nullptr);
+    SetTimer(hwnd, 1, 10, nullptr);   // 10ms：更快感知前台切换
 
     WNDCLASSW cc = {};
     cc.lpfnWndProc = CatcherProc;
