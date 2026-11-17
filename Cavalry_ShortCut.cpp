@@ -242,7 +242,7 @@ static void DrawPieTabs(HDC dc) {
           Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
-        HFONT f = MakeFont(12, false);
+        HFONT f = MakeFont(13, false);
         HGDIOBJ of = SelectObject(dc, f);
         SetTextAlign(dc, TA_LEFT | TA_TOP);
         DrawTextW(dc, boxLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
@@ -258,7 +258,7 @@ static void DrawPieTabs(HDC dc) {
           Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
-        HFONT f = MakeFont(12, false);
+        HFONT f = MakeFont(13, false);
         HGDIOBJ of = SelectObject(dc, f);
         SetTextAlign(dc, TA_LEFT | TA_TOP);
         DrawTextW(dc, modLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
@@ -812,7 +812,7 @@ static void UpdateScrollInfo() {
 
 // ---------------------------------------------------------------- 绘制
 static HFONT MakeFont(int px, bool bold) {
-    return CreateFontW(px, 0, 0, 0, bold ? FW_SEMIBOLD : FW_NORMAL, FALSE, FALSE, FALSE,
+    return CreateFontW(-px, 0, 0, 0, bold ? FW_SEMIBOLD : FW_NORMAL, FALSE, FALSE, FALSE,
                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
 }
@@ -883,7 +883,7 @@ static void DrawPie(HDC dc) {
     HFONT f = MakeFont(13);
     HGDIOBJ of = SelectObject(dc, f);
     RECT cr = { cx - kCenterR, cy - 10, cx + kCenterR, cy + 10 };
-    DrawTextW(dc, L"Tab 搜索", -1, &cr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    DrawTextW(dc, L"Tab 搜索", -1, &cr, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
     SelectObject(dc, of);
     DeleteObject(f);
 }
