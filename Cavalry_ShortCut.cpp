@@ -1572,8 +1572,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         if (g_dragging) {
             POINT pt; GetCursorPos(&pt);
-            SetWindowPos(hwnd, HWND_TOP, pt.x - g_dragOffset.x, pt.y - g_dragOffset.y, 0, 0,
-                         SWP_NOSIZE | SWP_NOZORDER);
+            int nx = pt.x - g_dragOffset.x, ny = pt.y - g_dragOffset.y;
+            RECT work; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+            if (nx < work.left) nx = work.left;
+            if (ny < work.top) ny = work.top;
+            if (nx + g_winW > work.right) nx = work.right - g_winW;
+            if (ny + g_winH > work.bottom) ny = work.bottom - g_winH;
+            SetWindowPos(hwnd, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
             return 0;
         }
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
