@@ -106,6 +106,10 @@ static const int kTabCount = 6;
 static HWND g_edit = nullptr;
 static HWND g_scrollbar = nullptr;
 static int g_scroll = 0;
+static int g_maxScroll = 0;
+static bool g_thumbDrag = false;
+static int g_dragStartY = 0;
+static int g_dragStartScroll = 0;
 static bool g_hoverFolder = false;
 static bool g_hoverGear = false;
 
@@ -640,8 +644,9 @@ static void UpdateScrollInfo() {
     si.nMax = total > 0 ? total - 1 : 0;
     si.nPage = page;
     si.nPos = g_scroll;
+    g_maxScroll = maxScroll;
     SetScrollInfo(g_scrollbar, SB_CTL, &si, TRUE);
-    ShowWindow(g_scrollbar, (g_mode == M_SEARCH && total > page) ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_scrollbar, SW_HIDE);   // 自绘滚动条，原生控件只保留句柄不用
 }
 
 // ---------------------------------------------------------------- 绘制
@@ -756,6 +761,39 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
         SelectObject(dc, of);
         DeleteObject(fi);
     }
+}
+
+static RECT ScrollTrackRect() {
+    RECT p = PanelRect();
+    RECT r;
+    r.right = p.right - 16;
+    r.left = r.right - 6;
+    r.top = p.top + 110;
+    r.bottom = r.top + 7 * 38 - 4;
+    return r;
+}
+
+static RECT ScrollThumbRect() {
+    RECT t = ScrollTrackRect();
+    int total = (int)g_results.size();
+    if (total <= 7) return RECT{0,0,0,0};
+    int trackH = t.bottom - t.top;
+    int thumbH = (int)((double)trackH * 7 / total);
+    if (thumbH < 26) thumbH = 26;
+    int maxScroll = g_maxScroll > 0 ? g_maxScroll : 1;
+    int y = t.top + (int)((double)(trackH - thumbH) * g_scroll / maxScroll);
+    RECT r = { t.left - 1, y, t.right + 1, y + thumbH };
+    return r;
+}
+
+static void DrawScrollBar(HDC dc) {
+    if (g_mode != M_SEARCH) return;
+    if ((int)g_results.size() <= 7) return;
+
+    RECT t = ScrollTrackRect();
+    FillRound(dc, t, 3, RGB(44, 44, 47), RGB(44, 44, 47));
+    RECT th = ScrollThumbRect();
+    FillRound(dc, th, 3, g_thumbDrag ? RGB(150, 150, 158) : RGB(110, 110, 118), RGB(110, 110, 118));
 }
 
 static void DrawResults(HDC dc) {
@@ -1179,6 +1217,28 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         g_mode = M_PIE;
         SyncEditFromMode();
         return 0;
+    case WM_LBUTTONDOWN: {
+        if (g_mode == M_SEARCH && (int)g_results.size() > 7) {
+            POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+            RECT th = ScrollThumbRect();
+            if (p.x >= th.left - 4 && p.x < th.right + 4 && p.y >= th.top && p.y < th.bottom) {
+                g_thumbDrag = true;
+                g_dragStartY = p.y;
+                g_dragStartScroll = g_scroll;
+                SetCapture(hwnd);
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            }
+            RECT tr = ScrollTrackRect();
+            if (p.x >= tr.left - 6 && p.x < tr.right + 6 && p.y >= tr.top && p.y < tr.bottom) {
+                g_scroll += (p.y < th.top) ? -7 : 7;
+                UpdateScrollInfo();
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            }
+        }
+        break;
+    }
     case WM_LBUTTONUP: {
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
 
