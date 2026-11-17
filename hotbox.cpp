@@ -1321,6 +1321,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             int edges = 0;
             if (ex >= prr.right) edges |= 1;     // 右侧整条拖拽带
             if (ey >= prr.bottom) edges |= 2;    // 下方整条拖拽带
+            if (edges) {
                 g_resizing = true;
                 g_resizeEdges = edges;
                 GetCursorPos(&g_resizeStart);
