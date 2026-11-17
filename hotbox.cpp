@@ -324,6 +324,7 @@ static LRESULT CALLBACK EditSubclass(HWND h, UINT m, WPARAM w, LPARAM l, UINT_PT
         if (ctrl && w == 'A') { SendMessageW(h, EM_SETSEL, (WPARAM)0, (LPARAM)-1); return 0; }
         if (ctrl && w >= '1' && w <= '6') { PostMessageW(g_main, WM_APP + 5, (WPARAM)(w - '0'), 0); return 0; }
         if (w == VK_TAB) { PostMessageW(g_main, WM_APP + 6, (WPARAM)(shift ? 1 : 0), 0); return 0; }
+        if (w == VK_OEM_3) { PostMessageW(g_main, WM_APP + 7, 0, 0); return 0; }   // ` 执行
         if (w == VK_ESCAPE || w == VK_RETURN || w == VK_UP || w == VK_DOWN) {
             PostMessageW(g_main, WM_KEYDOWN, w, 0);
             return 0;
@@ -1318,22 +1319,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (nowDown && !prevDown) Log("pie click: hover=" + std::to_string(g_hover));
                 prevDown = nowDown;
             }
-            if (true) {
-                HWND fg = GetForegroundWindow();
-                static HWND lastFg = nullptr;
-                if (fg && fg != g_main && fg != lastFg) {
-                    lastFg = fg;
-                    if (IsCavalryWindow(fg)) {
-                        if (g_hover >= 0 && g_slots[g_hover].used) {
-                            Item it{ g_slots[g_hover].name, g_slots[g_hover].kind, g_slots[g_hover].value };
-                            RunItem(it);
-                        }
-                    } else {
-                        ShowWindow(hwnd, SW_HIDE);
-                    }
-                }
-                (void)0;
-            }
             if (false && (GetAsyncKeyState(VK_LBUTTON) & 0x8000)) {
                 bool outside = (cl.x < 0 || cl.y < 0 || cl.x >= g_winW || cl.y >= g_winH);
                 if (g_hover >= 0 && g_slots[g_hover].used) {
@@ -1370,11 +1355,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         ReleaseCapture();
         return 0;
     case WM_ACTIVATE:
-        if (LOWORD(wp) == WA_INACTIVE && !g_inMenu && !g_resizing && !g_thumbDrag) {
-            if (g_mode == M_SEARCH) { ShowWindow(hwnd, SW_HIDE); ShowCatcher(false); }   // 搜索面板：点外面关闭
-            else if (g_mode == M_SETTINGS) ShowWindow(hwnd, SW_HIDE);
-        }
-        return 0;
+        return 0;   // 切窗口不再关闭面板，方便观察状态
     case WM_SETCURSOR: {
         POINT cp; GetCursorPos(&cp); ScreenToClient(hwnd, &cp);
         RECT pc = PanelRect();
@@ -1580,6 +1561,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         break;
     case WM_KEYDOWN: {
+        if (wp == VK_OEM_3) { PostMessageW(hwnd, WM_APP + 7, 0, 0); return 0; }   // ` 执行当前项
         if (g_mode == M_SEARCH) {
             bool c = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
             bool s = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
@@ -1636,6 +1618,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     case WM_APP + 7:
+        if (g_mode == M_SEARCH) {
+            ExecSelected();   // ` 执行搜索选中项
+            return 0;
+        }
         if (g_mode == M_PIE) {
             if (g_hover >= 0 && g_slots[g_hover].used) {
                 Item it{ g_slots[g_hover].name, g_slots[g_hover].kind, g_slots[g_hover].value };
