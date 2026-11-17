@@ -209,16 +209,16 @@ static RECT TabBoxRect(int i) {   // 第一行：1..4
     r.left = 24 + i * 62;
     r.top = 24;
     r.right = r.left + 62;
-    r.bottom = r.top + 30;
+    r.bottom = r.top + 22;
     return r;
 }
 
 static RECT TabModRect(int i) {   // 第二行：无 / Ctrl / Shift / Alt
     RECT r;
     r.left = 24 + i * 58;
-    r.top = 60;
+    r.top = 50;
     r.right = r.left + 58;
-    r.bottom = r.top + 30;
+    r.bottom = r.top + 22;
     return r;
 }
 
@@ -247,7 +247,7 @@ static void DrawPieTabs(HDC dc) {
         DrawTextW(dc, boxLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         SelectObject(dc, of);
         DeleteObject(f);
-        if (on) { RECT u = { r.left + 8, r.bottom - 2, r.right - 8, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
+        if (on) { RECT u = { r.left, r.bottom - 7, r.right, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
     }
     for (int i = 0; i < 4; ++i) {
         RECT r = TabModRect(i);
@@ -262,7 +262,7 @@ static void DrawPieTabs(HDC dc) {
         DrawTextW(dc, modLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         SelectObject(dc, of);
         DeleteObject(f);
-        if (on) { RECT u = { r.left + 4, r.bottom - 2, r.right - 4, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
+        if (on) { RECT u = { r.left, r.bottom - 7, r.right, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
     }
 }
 // ---------------------------------------------------------------- 图标（Add Layers 同款）
