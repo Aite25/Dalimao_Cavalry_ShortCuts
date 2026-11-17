@@ -2075,10 +2075,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
         std::string raw = ReadFileUtf8(ExeDir() + L"\\Cavalry_ShortCut_pinned.txt");
         size_t st = 0;
         while (st < raw.size()) {
-            size_t en = raw.find('\\n', st);
+            size_t en = raw.find('\n', st);
             if (en == std::string::npos) en = raw.size();
             std::string line = raw.substr(st, en - st);
-            if (!line.empty() && line.back() == '\\r') line.pop_back();
+            if (!line.empty() && line.back() == '\r') line.pop_back();
             if (!line.empty()) g_pinned.push_back(Widen(line));
             st = en + 1;
         }
