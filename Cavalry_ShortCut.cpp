@@ -1199,6 +1199,10 @@ static void LoadConfig() {
 // ---------------------------------------------------------------- 鼠标钩子（圆盘外部确认）
 static HHOOK g_mouseHook = nullptr;
 static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode == HC_ACTION && wParam == WM_RBUTTONDOWN && g_main && IsWindowVisible(g_main) && g_mode == M_PIE) {
+        PostMessageW(g_main, WM_APP + 8, 0, 0);
+        return 1;
+    }
     if (nCode == HC_ACTION && wParam == WM_LBUTTONDOWN && g_main && IsWindowVisible(g_main) && g_mode == M_PIE) {
         PostMessageW(g_main, WM_APP + 7, 0, 0);
     }
@@ -1675,6 +1679,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         return 0;
     }
+    case WM_APP + 8:
+        ShowWindow(hwnd, SW_HIDE);
+        return 0;
     case WM_APP + 7:
         if (g_mode == M_SEARCH) {
             ExecSelected();   // ` 执行搜索选中项
@@ -1775,7 +1782,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
 
     SetTimer(hwnd, 1, 25, nullptr);
     g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, LowLevelMouseProc, GetModuleHandleW(nullptr), 0);
-    if (g_mouseHook) { UnhookWindowsHookEx(g_mouseHook); g_mouseHook = nullptr; }
 
     WNDCLASSW cc = {};
     cc.lpfnWndProc = CatcherProc;
