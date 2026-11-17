@@ -79,7 +79,8 @@ static Slot g_slots[8];          // 当前激活的一组
 static Slot g_store[16][8];      // [box*4+mod][slot]
 static int  g_box = 0;           // 0..3（热盒 1..4）
 static int  g_mod = 0;
-static bool g_ctrlUsed = false;   // Ctrl 是否被当作组合键使用           // 0=无 1=Ctrl 2=Shift 3=Alt
+static bool g_ctrlUsed = false;   // Ctrl 是否被当作组合键使用
+static bool g_binding = false;
 
 
 struct Item {
@@ -88,6 +89,8 @@ struct Item {
     std::wstring value;
     std::wstring cat;      // 脚本 / 形状 / 行为 / 工具 / 效果
 };
+static Item g_bindItem;            // 待绑定的搜索项
+static std::vector<std::wstring> g_pinned;   // 置顶项 key = kind + "|" + value
 static std::vector<Item> g_index;      // 搜索结果来源
 
 enum Mode { M_PIE, M_SEARCH, M_SETTINGS };
@@ -240,11 +243,13 @@ static void DrawPieTabs(HDC dc) {
         { HBRUSH tb = CreateSolidBrush(on ? RGB(52, 54, 60) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
           HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(52, 54, 60) : RGB(36, 36, 40)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
           Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
-        HFONT f = MakeFont(14, on);
+        HFONT f = MakeFont(13, on);
         HGDIOBJ of = SelectObject(dc, f);
-        DrawTextW(dc, boxLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SetTextAlign(dc, TA_LEFT | TA_TOP);
+        DrawTextW(dc, boxLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
         SelectObject(dc, of);
         DeleteObject(f);
         if (on) { RECT u = { r.left + 8, r.bottom - 2, r.right - 8, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
@@ -255,11 +260,13 @@ static void DrawPieTabs(HDC dc) {
         { HBRUSH tb = CreateSolidBrush(on ? RGB(52, 54, 60) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
           HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(52, 54, 60) : RGB(36, 36, 40)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
           Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
         HFONT f = MakeFont(13, on);
         HGDIOBJ of = SelectObject(dc, f);
-        DrawTextW(dc, modLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SetTextAlign(dc, TA_LEFT | TA_TOP);
+        DrawTextW(dc, modLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
         SelectObject(dc, of);
         DeleteObject(f);
         if (on) { RECT u = { r.left + 4, r.bottom - 2, r.right - 4, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
@@ -306,6 +313,7 @@ static Gdiplus::Image* GetIcon(const std::wstring& type) {
 static void DrawIcon(HDC dc, const std::wstring& type, RECT box) {
     Gdiplus::Image* img = GetIcon(type);
     if (!img) return;
+        int dcSaved = SaveDC(dc);   // GDI+ 会改 DC 状态，用完恢复
     Gdiplus::Graphics g(dc);
     g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
     g.DrawImage(img, box.left, box.top, box.right - box.left, box.bottom - box.top);
@@ -703,6 +711,17 @@ static void UpdateResults() {
         g_results.push_back(it);
         if (g_results.size() >= 400) break;
     }
+    if (!g_pinned.empty()) {
+        std::vector<Item> pref, rest;
+        for (auto& it : g_results) {
+            std::wstring key = it.kind + L"|" + it.value;
+            bool pin = false;
+            for (auto& k : g_pinned) if (k == key) { pin = true; break; }
+            if (pin) pref.push_back(it); else rest.push_back(it);
+        }
+        g_results = pref;
+        for (auto& it : rest) g_results.push_back(it);
+    }
     if (g_sel >= (int)g_results.size()) g_sel = 0;
 }
 
@@ -830,6 +849,7 @@ static void DrawPie(HDC dc) {
         bool sel = (i == g_hover);
         FillRound(dc, r, 8, sel ? kSectorSel : kSectorFill, sel ? kRowSel : kSectorBorder);   // 选中：灰底 + 蓝框
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         HFONT f = MakeFont(15);
         HGDIOBJ of = SelectObject(dc, f);
@@ -839,14 +859,13 @@ static void DrawPie(HDC dc) {
             DrawTextW(dc, L"—", -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         } else {
             SetTextColor(dc, kText);
-            RECT tr = r; tr.left += 8; tr.right -= 26;
-            DrawTextW(dc, g_slots[i].name.c_str(), -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+            RECT tr = { r.left + 6, r.top, r.right - 6, r.bottom };
+            DrawTextW(dc, g_slots[i].name.c_str(), -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOCLIP);
 
             SetTextColor(dc, kTextDim);
             SetTextAlign(dc, TA_RIGHT | TA_TOP);
             std::wstring k = g_slots[i].key.empty() ? std::to_wstring(i + 1) : g_slots[i].key;
             TextOutW(dc, r.right - 8, r.top + 6, k.c_str(), (int)k.size());
-            SetTextAlign(dc, TA_LEFT | TA_TOP);
         }
         SelectObject(dc, of);
         DeleteObject(f);
@@ -856,6 +875,7 @@ static void DrawPie(HDC dc) {
     int cx = CenterX(), cy = CenterY();
     // 中心圆 + 弧线：GDI+ 抗锯齿
     {
+        int dcSaved = SaveDC(dc);   // GDI+ 会改 DC 状态，用完恢复
         Gdiplus::Graphics g(dc);
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         Gdiplus::SolidBrush ffill(Gdiplus::Color(255, 38, 38, 38));
@@ -875,11 +895,13 @@ static void DrawPie(HDC dc) {
             g.DrawArc(&arcPen, (REAL)(cx - ar), (REAL)(cy - ar), (REAL)(ar * 2), (REAL)(ar * 2),
                       (REAL)(angDeg - 28.0), (REAL)56.0);
         }
+        RestoreDC(dc, dcSaved);
     }
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(150, 150, 150));
-    HFONT f = MakeFont(13);
+    HFONT f = MakeFont(11);
     HGDIOBJ of = SelectObject(dc, f);
     RECT cr = { cx - kCenterR, cy - 10, cx + kCenterR, cy + 10 };
     DrawTextW(dc, L"Tab 搜索", -1, &cr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -897,6 +919,7 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
     RECT p = PanelRect();
     FillRound(dc, p, 14, kPanelFill, kPanelBorder);
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
     SetBkMode(dc, TRANSPARENT);
     HFONT ft = MakeFont(13);
     HGDIOBJ of = SelectObject(dc, ft);
@@ -955,6 +978,12 @@ static void DrawScrollBar(HDC dc) {
     FillRound(dc, th, 3, g_thumbDrag ? RGB(150, 150, 158) : RGB(110, 110, 118), RGB(110, 110, 118));
 }
 
+static bool IsPinnedItem(const Item& it) {
+    std::wstring key = it.kind + L"|" + it.value;
+    for (auto& k : g_pinned) if (k == key) return true;
+    return false;
+}
+
 static void DrawResults(HDC dc) {
     for (int row = 0; row < VisibleRows(); ++row) {
         int i = g_scroll + row;
@@ -978,11 +1007,12 @@ static void DrawResults(HDC dc) {
         }
         if (sel) { RECT bar = { r.left, r.top, r.left + 4, r.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, kText);
         HFONT f = MakeFont(15);
         HGDIOBJ of = SelectObject(dc, f);
-        RECT ibox = { r.left + 30, r.top + 5, r.left + 46, r.top + 21 };
+        RECT ibox = { r.left + 30, (r.top + r.bottom) / 2 - 8, r.left + 46, (r.top + r.bottom) / 2 + 8 };
         if (g_results[i].kind == L"layer") DrawIcon(dc, g_results[i].value, ibox);
         RECT tr = r; tr.left += 52; tr.right -= 90;
         if (row < 6) {   // 只给当前可见的前 6 行编号
@@ -994,11 +1024,18 @@ static void DrawResults(HDC dc) {
         }
         DrawTextW(dc, g_results[i].name.c_str(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
+        if (IsPinnedItem(g_results[i])) {
+            SetTextColor(dc, RGB(255, 183, 77));
+            RECT pr2 = { r.right - 96, r.top, r.right - 62, r.bottom };
+            DrawTextW(dc, L"置顶", -1, &pr2, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+            SetTextColor(dc, RGB(210, 210, 210));
+        }
         SetTextColor(dc, RGB(210, 210, 210));
-        SetTextAlign(dc, TA_RIGHT | TA_CENTER);
-        std::wstring tag = (g_results[i].kind == L"script") ? L"脚本" : L"图层";
-        TextOutW(dc, r.right - 12, (r.top + r.bottom) / 2, tag.c_str(), (int)tag.size());
-        SetTextAlign(dc, TA_LEFT | TA_TOP);
+        {
+            RECT tg = { r.right - 60, r.top, r.right - 8, r.bottom };
+            std::wstring tagv = (g_results[i].kind == L"script") ? L"脚本" : L"图层";
+            DrawTextW(dc, tagv.c_str(), -1, &tg, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+        }
 
         SelectObject(dc, of);
         DeleteObject(f);
@@ -1006,6 +1043,7 @@ static void DrawResults(HDC dc) {
 
     if (g_results.empty() && !g_query.empty()) {
         RECT r = RowRect(0);
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, RGB(130, 130, 130));
         HFONT f = MakeFont(14);
@@ -1047,6 +1085,7 @@ static void DrawMiniPie(HDC dc, RECT area, int sel) {
         RECT r = { cx + x - bw / 2, cy + y - bh / 2, cx + x + bw / 2, cy + y + bh / 2 };
         bool on = (i == sel);
         FillRound(dc, r, 5, on ? kRowSel : kSectorFill, on ? kRowSel : kSectorBorder);
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, g_slots[i].used ? kText : RGB(100, 100, 100));
         HFONT f = MakeFont(12);
@@ -1061,6 +1100,7 @@ static void DrawSettings(HDC dc) {
     RECT p = PanelRect();
     FillRound(dc, p, 14, kPanelFill, kPanelBorder);
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
     SetBkMode(dc, TRANSPARENT);
     HFONT ft = MakeFont(13);
     HGDIOBJ of = SelectObject(dc, ft);
@@ -1083,6 +1123,7 @@ static void DrawSettings(HDC dc) {
         DeleteObject(pen);
     }
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(150, 150, 150));
     HFONT fp = MakeFont(12);
@@ -1103,6 +1144,7 @@ static void DrawSettings(HDC dc) {
         }
         if (sel) { RECT bar = { r.left, r.top, r.left + 4, r.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, kText);
         HFONT f = MakeFont(15);
@@ -1121,6 +1163,7 @@ static void DrawTabs(HDC dc) {
         RECT r = TabRect(i);
         bool on = (i == g_tab);
 
+        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(255, 255, 255) : RGB(150, 150, 155));
         HFONT f = MakeFont(14);
@@ -1201,6 +1244,18 @@ static void Paint(HWND hwnd) {
     }
 
     if (g_mode == M_PIE) DrawPieTabs(mem);
+    if (g_binding) {
+        std::wstring hint = L"绑定：" + g_bindItem.name + L"  →  点击扇区完成 · Esc 取消";
+        SetBkMode(mem, TRANSPARENT);
+        SetTextColor(mem, RGB(255, 210, 120));
+        HFONT hf = MakeFont(15);
+        HGDIOBJ ho = SelectObject(mem, hf);
+        RECT hr = { 0, 92, g_winW, 118 };
+        SetMapMode(mem, MM_TEXT); SetViewportOrgEx(mem, 0, 0, nullptr); SetTextAlign(mem, TA_LEFT | TA_TOP);
+        DrawTextW(mem, hint.c_str(), -1, &hr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(mem, ho);
+        DeleteObject(hf);
+    }
     if (g_mode != M_SETTINGS) DrawTopIcons(mem);   // 设置页右上角是关闭按钮
     if (g_mode != M_PIE) {   // 仅搜索/设置页显示拖拽条
         RECT pr = PanelRect();
@@ -1560,16 +1615,25 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_mode == M_SEARCH) {
             POINT mp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
             int hr = -1;
-            for (int rr = 0; rr < VisibleRows(); ++rr) {
-                RECT rrr = RowRect(rr);
-                if (mp.x >= rrr.left && mp.x < rrr.right && mp.y >= rrr.top && mp.y < rrr.bottom) { hr = g_scroll + rr; break; }
+            {
+                RECT first = RowRect(0);
+                RECT area = { first.left, first.top, first.right, first.bottom + 26 * (VisibleRows() - 1) + 6 };
+                if (mp.x >= area.left && mp.x < area.right && mp.y >= area.top && mp.y < area.bottom) {
+                    int idx = (mp.y - first.top) / 26;
+                    if (idx >= 0 && idx < VisibleRows()) hr = g_scroll + idx;
+                }
             }
             if (hr != g_hoverRow) { g_hoverRow = hr; InvalidateRect(hwnd, nullptr, FALSE); }
         }
         if (g_dragging) {
             POINT pt; GetCursorPos(&pt);
-            SetWindowPos(hwnd, HWND_TOP, pt.x - g_dragOffset.x, pt.y - g_dragOffset.y, 0, 0,
-                         SWP_NOSIZE | SWP_NOZORDER);
+            int nx = pt.x - g_dragOffset.x, ny = pt.y - g_dragOffset.y;
+            RECT work; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+            if (nx < work.left) nx = work.left;
+            if (ny < work.top) ny = work.top;
+            if (nx + g_winW > work.right) nx = work.right - g_winW;
+            if (ny + g_winH > work.bottom) ny = work.bottom - g_winH;
+            SetWindowPos(hwnd, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
             return 0;
         }
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
@@ -1580,11 +1644,53 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         return 0;
     }
-    case WM_RBUTTONUP:
+    case WM_RBUTTONUP: {
+        POINT rp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+        if (g_mode == M_SEARCH) {
+            RECT fr = RowRect(0);
+            int rowHit = (rp.y - fr.top) / 26;
+            int idx2 = g_scroll + rowHit;
+            if (rp.x >= fr.left && rp.x < fr.right && rowHit >= 0 && rowHit < VisibleRows() && idx2 >= 0 && idx2 < (int)g_results.size()) {
+                g_sel = idx2;
+                HMENU hm = CreatePopupMenu();
+                AppendMenuW(hm, MF_STRING, 1001, L"绑定到热盒…");
+                std::wstring pinKey = g_results[idx2].kind + L"|" + g_results[idx2].value;
+                bool isPinned = false;
+                for (auto& k : g_pinned) if (k == pinKey) { isPinned = true; break; }
+                AppendMenuW(hm, MF_STRING, 1002, isPinned ? L"取消置顶" : L"置顶");
+                POINT sp; GetCursorPos(&sp);
+                SetForegroundWindow(hwnd);
+                int cmd = (int)TrackPopupMenu(hm, TPM_RETURNCMD | TPM_RIGHTBUTTON, sp.x, sp.y, 0, hwnd, nullptr);
+                DestroyMenu(hm);
+                if (cmd == 1002) {
+                    std::wstring pk = g_results[idx2].kind + L"|" + g_results[idx2].value;
+                    bool found = false;
+                    for (size_t q = 0; q < g_pinned.size(); ++q) if (g_pinned[q] == pk) { g_pinned.erase(g_pinned.begin() + q); found = true; break; }
+                    if (!found) g_pinned.push_back(pk);
+                    {
+                        std::string raw;
+                        for (auto& k : g_pinned) raw += Narrow(k) + "\n";
+                        WriteFileUtf8(ExeDir() + L"\\Cavalry_ShortCut_pinned.txt", raw);
+                    }
+                    UpdateResults();
+                    InvalidateRect(hwnd, nullptr, TRUE);
+                    return 0;
+                }
+                if (cmd == 1001) {
+                    g_bindItem = g_results[idx2];
+                    g_binding = true;
+                    ShowAtCursor(hwnd);
+                    InvalidateRect(hwnd, nullptr, TRUE);
+                    return 0;
+                }
+                return 0;
+            }
+        }
         ShowWindow(hwnd, SW_HIDE);
         g_mode = M_PIE;
         SyncEditFromMode();
         return 0;
+    }
     case WM_LBUTTONDOWN: {
         {
             int ex = (int)GET_X_LPARAM(lp), ey = (int)GET_Y_LPARAM(lp);
@@ -1669,6 +1775,20 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         if (g_mode == M_PIE) {
             int h = HitTestPie(p);
+            if (g_binding) {
+                if (h >= 0) {
+                    g_slots[h].name = g_bindItem.name;
+                    g_slots[h].kind = g_bindItem.kind;
+                    g_slots[h].value = g_bindItem.value;
+                    g_slots[h].key = std::to_wstring(h + 1);
+                    g_slots[h].used = true;
+                    SaveSectors();
+                    Log("bound to sector " + std::to_string(h));
+                }
+                g_binding = false;
+                ShowWindow(hwnd, SW_HIDE);
+                return 0;
+            }
             if (h == -2) { ShowWindow(hwnd, SW_HIDE); return 0; }
             if (h >= 0 && g_slots[h].used) {
                 Item it{ g_slots[h].name, g_slots[h].kind, g_slots[h].value };
@@ -1805,6 +1925,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (wp == VK_MENU)    { SwitchSet(g_box, (g_mod == 3) ? 0 : 3); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         }
         if (wp == VK_ESCAPE) {
+            if (g_binding) { g_binding = false; ShowWindow(hwnd, SW_HIDE); return 0; }
             if (g_mode == M_SEARCH && g_bindSlot >= 0) { g_mode = M_SETTINGS; g_bindSlot = -1; }
             else if (g_mode != M_PIE) { g_mode = M_PIE; }
             else ShowWindow(hwnd, SW_HIDE);
@@ -1950,6 +2071,18 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     InitIcons();
     LoadConfig();
     LoadIndex();
+    {
+        std::string raw = ReadFileUtf8(ExeDir() + L"\\Cavalry_ShortCut_pinned.txt");
+        size_t st = 0;
+        while (st < raw.size()) {
+            size_t en = raw.find('\n', st);
+            if (en == std::string::npos) en = raw.size();
+            std::string line = raw.substr(st, en - st);
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (!line.empty()) g_pinned.push_back(Widen(line));
+            st = en + 1;
+        }
+    }
     LoadSectors();
 
     HWND msgWnd = CreateWindowExW(0, L"CavalryShortCut", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, inst, nullptr);
