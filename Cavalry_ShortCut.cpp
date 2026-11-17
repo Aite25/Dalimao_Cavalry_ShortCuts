@@ -1316,6 +1316,17 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
 // 圆盘用色键透明，透明像素的点击会穿透到下层窗口。为了能收到"热盒外部"的左键，
 // 额外铺一层几乎全透明（alpha=1）的全屏窗口，只负责接收点击。
 static HWND g_catcher = nullptr;
+
+// 按需注册热键：只有 Cavalry（或热盒自己）在前台时才占用 Ctrl+`，其它应用不受影响
+static HWND g_msgWndGlobal = nullptr;
+static bool g_hotkeyOn = false;
+
+static void SetHotkeyEnabled(bool on) {
+    if (on == g_hotkeyOn || !g_msgWndGlobal) return;
+    if (on) RegisterHotKey(g_msgWndGlobal, 1, g_hotkeyMods, g_hotkeyVk);
+    else    UnregisterHotKey(g_msgWndGlobal, 1);
+    g_hotkeyOn = on;
+}
 static bool IsCavalryWindow(HWND h) {
     DWORD pid = 0;
     GetWindowThreadProcessId(h, &pid);
@@ -1466,6 +1477,11 @@ static void OpenPath(const std::wstring& path) {
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_TIMER:
+        {   // 仅当 Cavalry 或热盒自己在前台时才占用热键
+            HWND fg = GetForegroundWindow();
+            bool want = IsCavalryWindow(fg) || fg == hwnd || (g_main && fg == g_main) || (g_edit && fg == g_edit);
+            if (want != g_hotkeyOn) SetHotkeyEnabled(want);
+        }
         if (IsWindowVisible(hwnd) && g_mode == M_PIE) {
             if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) { ShowWindow(hwnd, SW_HIDE); return 0; }   // 右键取消
             POINT cp; GetCursorPos(&cp);
@@ -1934,9 +1950,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     LoadIndex();
     LoadSectors();
 
-    HWND msgWnd = CreateWindowExW(0, L"CavalryShortCut", L"", 0, 0, 0, 0, 0,
-                                  HWND_MESSAGE, nullptr, inst, nullptr);
-    BOOL hk = RegisterHotKey(msgWnd ? msgWnd : hwnd, HOTKEY_TOGGLE, g_hotkeyMods, g_hotkeyVk);
+    HWND msgWnd = CreateWindowExW(0, L"CavalryShortCut", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, inst, nullptr);
+    g_msgWndGlobal = msgWnd;
+    BOOL hk = TRUE;   // 热键改为按需注册（仅 Cavalry 前台）
     Log("hotkey " + Narrow(g_hotkeySpec) + " -> " + (hk ? "ok" : ("FAIL err=" + std::to_string(GetLastError()))));
 
     SetTimer(hwnd, 1, 25, nullptr);
