@@ -98,6 +98,7 @@ static POINT g_dragOffset = {0, 0};
 
 static std::vector<Item> g_results;
 static void SyncEditFromMode();
+static void UpdateScrollInfo();
 static int g_tab = 0;
 static const wchar_t* kTabs[] = { L"全部", L"脚本", L"形状", L"行为", L"工具", L"效果" };
 static const int kTabCount = 6;
@@ -299,6 +300,7 @@ static void RunItem(const Item& it) {
 
 static HFONT MakeFont(int px, bool bold = false);
 static void SyncEditFromMode();
+static void UpdateScrollInfo();
 
 // ---------------------------------------------------------------- 原生输入框
 #define ID_EDIT 4001
@@ -345,7 +347,12 @@ static void SyncEditFromMode() {
         RECT ir = InputRect();
         SetWindowPos(g_edit, HWND_TOP, ir.left + 8, ir.top + 6,
                      ir.right - ir.left - 16, ir.bottom - ir.top - 10, SWP_SHOWWINDOW);
-        SetWindowPos(g_scrollbar, HWND_TOP, kWinW - 88, 250, 14, 200, SWP_SHOWWINDOW);
+        {
+            RECT pr = { 40, 60, kWinW - 40, kWinH - 60 };   // 与 PanelRect 一致
+            SetWindowPos(g_scrollbar, HWND_TOP, pr.right - 30, pr.top + 110,
+                         14, 7 * 38 - 4, SWP_NOZORDER);
+            UpdateScrollInfo();
+        }
         SetFocus(g_edit);
     } else {
         ShowWindow(g_edit, SW_HIDE);
@@ -541,7 +548,7 @@ static void UpdateResults() {
         if (g_tab > 0 && it.cat != kTabs[g_tab]) continue;
         if (!MatchScore(it.name, g_query)) continue;
         g_results.push_back(it);
-        if (g_results.size() >= 7) break;
+        if (g_results.size() >= 400) break;
     }
     if (g_sel >= (int)g_results.size()) g_sel = 0;
 }
@@ -616,6 +623,23 @@ static RECT IconRect(int i) {   // 0=文件夹 1=齿轮
     r.top = 12;
     r.bottom = r.top + 28;
     return r;
+}
+
+static void UpdateScrollInfo() {
+    if (!g_scrollbar) return;
+    int total = (int)g_results.size();
+    int page = 7;
+    int maxScroll = total > page ? total - page : 0;
+    if (g_scroll > maxScroll) g_scroll = maxScroll;
+    if (g_scroll < 0) g_scroll = 0;
+
+    SCROLLINFO si = { sizeof(si), SIF_RANGE | SIF_PAGE | SIF_POS };
+    si.nMin = 0;
+    si.nMax = total > 0 ? total - 1 : 0;
+    si.nPage = page;
+    si.nPos = g_scroll;
+    SetScrollInfo(g_scrollbar, SB_CTL, &si, TRUE);
+    ShowWindow(g_scrollbar, (g_mode == M_SEARCH && total > page) ? SW_SHOW : SW_HIDE);
 }
 
 // ---------------------------------------------------------------- 绘制
@@ -733,9 +757,11 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
 }
 
 static void DrawResults(HDC dc) {
-    for (size_t i = 0; i < g_results.size(); ++i) {
-        RECT r = RowRect((int)i);
-        bool sel = ((int)i == g_sel);
+    for (int row = 0; row < 7; ++row) {
+        int i = g_scroll + row;
+        if (i >= (int)g_results.size()) break;
+        RECT r = RowRect(row);
+        bool sel = (i == g_sel);
         FillRound(dc, r, 6, sel ? kRowSel : RGB(38, 38, 40), sel ? kRowSel : RGB(50, 50, 54));
 
         SetBkMode(dc, TRANSPARENT);
@@ -1188,8 +1214,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 InvalidateRect(hwnd, nullptr, TRUE);
             }
         } else if (g_mode == M_SEARCH) {
-            for (size_t i = 0; i < g_results.size(); ++i) {
-                RECT r = RowRect((int)i);
+    for (int row = 0; row < 7; ++row) {
+        int i = g_scroll + row;
+        if (i >= (int)g_results.size()) break;
+        RECT r = RowRect(row);
                 if (p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom) {
                     g_sel = (int)i;
                     ExecSelected();
@@ -1229,6 +1257,31 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
 
+    case WM_VSCROLL: {
+        if ((HWND)lp == g_scrollbar) {
+            int pos = g_scroll;
+            switch (LOWORD(wp)) {
+                case SB_LINEUP:   pos -= 1; break;
+                case SB_LINEDOWN: pos += 1; break;
+                case SB_PAGEUP:   pos -= 7; break;
+                case SB_PAGEDOWN: pos += 7; break;
+                case SB_THUMBTRACK:
+                case SB_THUMBPOSITION: pos = HIWORD(wp); break;
+            }
+            g_scroll = pos;
+            UpdateScrollInfo();
+            InvalidateRect(hwnd, nullptr, FALSE);
+        }
+        return 0;
+    }
+    case WM_MOUSEWHEEL:
+        if (g_mode == M_SEARCH) {
+            g_scroll -= (GET_WHEEL_DELTA_WPARAM(wp) / WHEEL_DELTA) * 3;
+            UpdateScrollInfo();
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
+        }
+        break;
     case WM_KEYDOWN: {
         if (g_mode == M_SEARCH && (GetKeyState(VK_CONTROL) & 0x8000) && (wp == 'A')) {
             if (g_edit) { SetFocus(g_edit); SendMessageW(g_edit, EM_SETSEL, (WPARAM)0, (LPARAM)-1); }
