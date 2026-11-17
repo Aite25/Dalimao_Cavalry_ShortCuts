@@ -586,14 +586,15 @@ static RECT SectorRect(int index) {
 }
 
 static int HitTestPie(POINT p) {
-    int dx = p.x - CenterX(), dy = p.y - CenterY();
-    if (dx * dx + dy * dy <= kCenterR * kCenterR) return -2;   // 中心
-    for (int i = 0; i < 8; ++i) {
-        if (!g_slots[i].used) continue;
-        RECT r = SectorRect(i);
-        if (p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom) return i;
-    }
-    return -1;
+    int dx = p.x - CenterX(), dy = CenterY() - p.y;   // 屏幕 Y 向下，转成数学坐标
+    if (dx * dx + dy * dy <= kCenterR * kCenterR) return -2;   // 中心圆
+
+    // 8 方向：任意角度都归到最近的一个扇区
+    double ang = atan2((double)dy, (double)dx);        // -pi..pi，0 = 东
+    int oct = (int)floor((ang + 3.14159265358979 / 8) / (3.14159265358979 / 4));
+    oct = (oct + 8) % 8;                            // 0=E,1=NE,2=N,3=NW,4=W,5=SW,6=S,7=SE
+    static const int map[8] = { 2, 1, 0, 7, 6, 5, 4, 3 };   // 转到 N=0,NE=1,E=2,...
+    return map[oct];
 }
 
 static RECT PanelRect() {
@@ -1281,10 +1282,16 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE && !g_inMenu && !g_resizing && !g_thumbDrag) {
-            bool leftDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
-            if (leftDown && g_mode == M_SEARCH && !g_results.empty()) {
-                if (g_hoverRow >= 0 && g_hoverRow < (int)g_results.size()) g_sel = g_hoverRow;
-                ExecSelected();   // 点热盒外面 = 应用当前高亮项
+            if (g_mode == M_SEARCH) {
+                ShowWindow(hwnd, SW_HIDE);      // 搜索面板：点外面就关闭
+            } else if (g_mode == M_PIE) {
+                bool leftDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+                if (leftDown && g_hover >= 0 && g_slots[g_hover].used) {
+                    Item it{ g_slots[g_hover].name, g_slots[g_hover].kind, g_slots[g_hover].value };
+                    RunItem(it);                 // 圆盘：点外面 = 确认当前高亮扇区
+                } else {
+                    ShowWindow(hwnd, SW_HIDE);
+                }
             } else {
                 ShowWindow(hwnd, SW_HIDE);
             }
