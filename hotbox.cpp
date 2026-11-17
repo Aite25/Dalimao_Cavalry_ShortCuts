@@ -817,7 +817,13 @@ static void DrawResults(HDC dc) {
         RECT r = RowRect(row);
         bool sel = (i == g_sel);
         bool hov = (i == g_hoverRow);
-        // 只画描边，不填充：hover=蓝框，选中=浅灰框，其余=暗淡框
+        // 普通行只描边；hover / 选中行填充高亮（直角）
+        {
+            if (hov || sel) {
+                HBRUSH fb = CreateSolidBrush(hov ? RGB(58, 110, 168) : RGB(70, 70, 74));
+                FillRect(dc, &r, fb);
+                DeleteObject(fb);
+            }
         {
             COLORREF bc = hov ? RGB(58, 110, 168) : (sel ? RGB(120, 120, 128) : RGB(56, 56, 60));
             HPEN bp = CreatePen(PS_SOLID, 1, bc);
@@ -946,7 +952,13 @@ static void DrawSettings(HDC dc) {
         RECT r = SettingRowRect(i);
         bool sel = (i == g_sel);
         bool hov = (i == g_hoverRow);
-        // 只画描边，不填充：hover=蓝框，选中=浅灰框，其余=暗淡框
+        // 普通行只描边；hover / 选中行填充高亮（直角）
+        {
+            if (hov || sel) {
+                HBRUSH fb = CreateSolidBrush(hov ? RGB(58, 110, 168) : RGB(70, 70, 74));
+                FillRect(dc, &r, fb);
+                DeleteObject(fb);
+            }
         {
             COLORREF bc = hov ? RGB(58, 110, 168) : (sel ? RGB(120, 120, 128) : RGB(56, 56, 60));
             HPEN bp = CreatePen(PS_SOLID, 1, bc);
