@@ -195,6 +195,69 @@ static std::wstring ToLower(std::wstring s) {
     return s;
 }
 
+
+static void Log(const std::string& s);
+static void FillRound(HDC dc, RECT r, int radius, COLORREF fill, COLORREF border);
+static HFONT MakeFont(int px, bool bold = false);
+static void SaveActive();
+static void LoadActive();
+
+// ---------------------------------------------------------------- 顶部页签（热盒 1-4 / 修饰键）
+static RECT TabBoxRect(int i) {   // 第一行：1..4
+    RECT r;
+    r.left = 24 + i * 46;
+    r.top = 24;
+    r.right = r.left + 40;
+    r.bottom = r.top + 24;
+    return r;
+}
+
+static RECT TabModRect(int i) {   // 第二行：无 / Ctrl / Shift / Alt
+    RECT r;
+    r.left = 24 + i * 58;
+    r.top = 52;
+    r.right = r.left + 52;
+    r.bottom = r.top + 24;
+    return r;
+}
+
+static void SwitchSet(int box, int mod) {
+    SaveActive();
+    g_box = (box >= 0 && box < 4) ? box : g_box;
+    g_mod = (mod >= 0 && mod < 4) ? mod : g_mod;
+    LoadActive();
+    Log("set box=" + std::to_string(g_box + 1) + " mod=" + std::to_string(g_mod));
+}
+
+static void DrawPieTabs(HDC dc) {
+    const wchar_t* boxLabels[4] = { L"1", L"2", L"3", L"4" };
+    const wchar_t* modLabels[4] = { L"无", L"Ctrl", L"Shift", L"Alt" };
+
+    for (int i = 0; i < 4; ++i) {
+        RECT r = TabBoxRect(i);
+        bool on = (i == g_box);
+        FillRound(dc, r, 5, on ? kRowSel : RGB(46, 46, 50), on ? kRowSel : RGB(60, 60, 64));
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, on ? RGB(255, 255, 255) : RGB(190, 190, 195));
+        HFONT f = MakeFont(13);
+        HGDIOBJ of = SelectObject(dc, f);
+        DrawTextW(dc, boxLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(dc, of);
+        DeleteObject(f);
+    }
+    for (int i = 0; i < 4; ++i) {
+        RECT r = TabModRect(i);
+        bool on = (i == g_mod);
+        FillRound(dc, r, 5, on ? kRowSel : RGB(46, 46, 50), on ? kRowSel : RGB(60, 60, 64));
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, on ? RGB(255, 255, 255) : RGB(190, 190, 195));
+        HFONT f = MakeFont(13);
+        HGDIOBJ of = SelectObject(dc, f);
+        DrawTextW(dc, modLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(dc, of);
+        DeleteObject(f);
+    }
+}
 // ---------------------------------------------------------------- 图标（Add Layers 同款）
 static ULONG_PTR g_gdiplusToken = 0;
 static std::wstring g_iconDir;
@@ -363,7 +426,6 @@ static void RunItem(const Item& it) {
     g_query.clear();
 }
 
-static HFONT MakeFont(int px, bool bold = false);
 static void SyncEditFromMode();
 static void UpdateScrollInfo();
 
@@ -1131,6 +1193,7 @@ static void Paint(HWND hwnd) {
         DrawSettings(mem);
     }
 
+    if (g_mode == M_PIE) DrawPieTabs(mem);
     if (g_mode != M_SETTINGS) DrawTopIcons(mem);   // 设置页右上角是关闭按钮
     if (g_mode != M_PIE) {   // 仅搜索/设置页显示拖拽条
         RECT pr = PanelRect();
@@ -1536,6 +1599,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_resizing) { g_resizing = false; ReleaseCapture(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
 
+        // 页签点击（圆盘模式）
+        if (g_mode == M_PIE) {
+            for (int i = 0; i < 4; ++i) {
+                RECT br = TabBoxRect(i);
+                if (p.x >= br.left && p.x < br.right && p.y >= br.top && p.y < br.bottom) { SwitchSet(i, g_mod); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+                RECT mr = TabModRect(i);
+                if (p.x >= mr.left && p.x < mr.right && p.y >= mr.top && p.y < mr.bottom) { SwitchSet(g_box, i); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            }
+        }
         // 图标点击：两个独立命中框（左=文件夹，右=设置）
         {
             RECT gear = IconRect(0);
@@ -1664,6 +1736,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_mode == M_SEARCH && (GetKeyState(VK_CONTROL) & 0x8000) && (wp == 'A')) {
             if (g_edit) { SetFocus(g_edit); SendMessageW(g_edit, EM_SETSEL, (WPARAM)0, (LPARAM)-1); }
             return 0;   // 吞掉，避免系统提示音
+        }
+        if (g_mode == M_PIE) {
+            if (wp >= '1' && wp <= '4') { SwitchSet(wp - '1', g_mod); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            if (wp == VK_CONTROL) { SwitchSet(g_box, (g_mod == 1) ? 0 : 1); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            if (wp == VK_SHIFT)   { SwitchSet(g_box, (g_mod == 2) ? 0 : 2); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            if (wp == VK_MENU)    { SwitchSet(g_box, (g_mod == 3) ? 0 : 3); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         }
         if (wp == VK_ESCAPE) {
             if (g_mode == M_SEARCH && g_bindSlot >= 0) { g_mode = M_SETTINGS; g_bindSlot = -1; }
