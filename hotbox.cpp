@@ -1145,7 +1145,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     case WM_RBUTTONUP:
-        ShowMenu(hwnd);
+        ShowWindow(hwnd, SW_HIDE);
+        g_mode = M_PIE;
+        SyncEditFromMode();
         return 0;
     case WM_LBUTTONUP: {
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
@@ -1226,6 +1228,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 
     case WM_KEYDOWN: {
+        if (g_mode == M_SEARCH && (GetKeyState(VK_CONTROL) & 0x8000) && (wp == 'A')) {
+            if (g_edit) { SetFocus(g_edit); SendMessageW(g_edit, EM_SETSEL, (WPARAM)0, (LPARAM)-1); }
+            return 0;   // 吞掉，避免系统提示音
+        }
         if (wp == VK_ESCAPE) {
             if (g_mode == M_SEARCH && g_bindSlot >= 0) { g_mode = M_SETTINGS; g_bindSlot = -1; }
             else if (g_mode != M_PIE) { g_mode = M_PIE; }
@@ -1328,6 +1334,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     g_main = hwnd;
     SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);
     CreateEdit(hwnd, inst);
+    ImmAssociateContext(hwnd, nullptr);   // 主窗口不吃输入法；输入框仍可用中文
     // 输入法保持启用：中文搜索需要它
 
     LoadConfig();
