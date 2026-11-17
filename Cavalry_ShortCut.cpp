@@ -1748,16 +1748,17 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         POINT mp; GetCursorPos(&mp); ScreenToClient(hwnd, &mp);
         int delta = GET_WHEEL_DELTA_WPARAM(wp);
         if (g_mode == M_PIE) {
+            bool onModRow = false;
             for (int i = 0; i < 4; ++i) {
-                RECT br = TabBoxRect(i);
-                if (mp.x >= br.left && mp.x < br.right && mp.y >= br.top && mp.y < br.bottom) {
-                    SwitchSet((g_box + (delta > 0 ? 3 : 1)) % 4, g_mod); InvalidateRect(hwnd, nullptr, TRUE); return 0;
-                }
                 RECT mr = TabModRect(i);
                 if (mp.x >= mr.left && mp.x < mr.right && mp.y >= mr.top && mp.y < mr.bottom) {
                     SwitchSet(g_box, (g_mod + (delta > 0 ? 3 : 1)) % 4); InvalidateRect(hwnd, nullptr, TRUE); return 0;
                 }
             }
+            (void)onModRow;
+            SwitchSet((g_box + (delta > 0 ? 3 : 1)) % 4, g_mod);   // 其它位置：滚轮切热盒
+            InvalidateRect(hwnd, nullptr, TRUE);
+            return 0;
         }
         if (g_mode == M_SEARCH) {
             for (int i = 0; i < kTabCount; ++i) {
