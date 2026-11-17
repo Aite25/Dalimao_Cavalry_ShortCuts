@@ -242,9 +242,10 @@ static void DrawPieTabs(HDC dc) {
           Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
-        HFONT f = MakeFont(14, on);
+        HFONT f = MakeFont(12, false);
         HGDIOBJ of = SelectObject(dc, f);
-        DrawTextW(dc, boxLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SetTextAlign(dc, TA_LEFT | TA_TOP);
+        DrawTextW(dc, boxLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
         SelectObject(dc, of);
         DeleteObject(f);
         if (on) { RECT u = { r.left + 8, r.bottom - 2, r.right - 8, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
@@ -257,9 +258,10 @@ static void DrawPieTabs(HDC dc) {
           Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
-        HFONT f = MakeFont(13, on);
+        HFONT f = MakeFont(12, false);
         HGDIOBJ of = SelectObject(dc, f);
-        DrawTextW(dc, modLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SetTextAlign(dc, TA_LEFT | TA_TOP);
+        DrawTextW(dc, modLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
         SelectObject(dc, of);
         DeleteObject(f);
         if (on) { RECT u = { r.left + 4, r.bottom - 2, r.right - 4, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
