@@ -209,16 +209,16 @@ static RECT TabBoxRect(int i) {   // 第一行：1..4
     r.left = 24 + i * 62;
     r.top = 24;
     r.right = r.left + 62;
-    r.bottom = r.top + 24;
+    r.bottom = r.top + 30;
     return r;
 }
 
 static RECT TabModRect(int i) {   // 第二行：无 / Ctrl / Shift / Alt
     RECT r;
     r.left = 24 + i * 58;
-    r.top = 52;
+    r.top = 60;
     r.right = r.left + 58;
-    r.bottom = r.top + 24;
+    r.bottom = r.top + 30;
     return r;
 }
 
@@ -237,32 +237,32 @@ static void DrawPieTabs(HDC dc) {
     for (int i = 0; i < 4; ++i) {
         RECT r = TabBoxRect(i);
         bool on = (i == g_box);
-        { HBRUSH tb = CreateSolidBrush(on ? RGB(52, 54, 60) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
+        { HBRUSH tb = CreateSolidBrush(on ? RGB(32, 92, 56) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
           HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(52, 54, 60) : RGB(36, 36, 40)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
           Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
         SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
+        SetTextColor(dc, on ? RGB(220, 255, 235) : RGB(140, 140, 146));
         HFONT f = MakeFont(14, on);
         HGDIOBJ of = SelectObject(dc, f);
         DrawTextW(dc, boxLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         SelectObject(dc, of);
         DeleteObject(f);
-        if (on) { RECT u = { r.left + 8, r.bottom - 2, r.right - 8, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
+        if (on) { RECT u = { r.left + 8, r.bottom - 2, r.right - 8, r.bottom }; HBRUSH ub = CreateSolidBrush(RGB(47, 205, 113)); FillRect(dc, &u, ub); DeleteObject(ub); }
     }
     for (int i = 0; i < 4; ++i) {
         RECT r = TabModRect(i);
         bool on = (i == g_mod);
-        { HBRUSH tb = CreateSolidBrush(on ? RGB(52, 54, 60) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
+        { HBRUSH tb = CreateSolidBrush(on ? RGB(32, 92, 56) : RGB(36, 36, 40)); FillRect(dc, &r, tb); DeleteObject(tb);
           HPEN tp2 = CreatePen(PS_SOLID, 1, on ? RGB(52, 54, 60) : RGB(36, 36, 40)); HGDIOBJ ob2 = SelectObject(dc, tp2), obb2 = SelectObject(dc, GetStockObject(NULL_BRUSH));
           Rectangle(dc, r.left, r.top, r.right, r.bottom); SelectObject(dc, obb2); SelectObject(dc, ob2); DeleteObject(tp2); }
         SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
+        SetTextColor(dc, on ? RGB(220, 255, 235) : RGB(140, 140, 146));
         HFONT f = MakeFont(13, on);
         HGDIOBJ of = SelectObject(dc, f);
         DrawTextW(dc, modLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         SelectObject(dc, of);
         DeleteObject(f);
-        if (on) { RECT u = { r.left + 4, r.bottom - 2, r.right - 4, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
+        if (on) { RECT u = { r.left + 4, r.bottom - 2, r.right - 4, r.bottom }; HBRUSH ub = CreateSolidBrush(RGB(47, 205, 113)); FillRect(dc, &u, ub); DeleteObject(ub); }
     }
 }
 // ---------------------------------------------------------------- 图标（Add Layers 同款）
