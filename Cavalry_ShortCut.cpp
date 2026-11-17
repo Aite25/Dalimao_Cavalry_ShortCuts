@@ -1754,6 +1754,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         break;
     }
     case WM_KEYDOWN: {
+    case WM_SYSKEYDOWN:
+        if (g_mode == M_PIE && wp == VK_MENU) { SwitchSet(g_box, (g_mod == 3) ? 0 : 3); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+        break;
         if (g_mode == M_PIE && (wp == VK_OEM_3 || wp == VK_SPACE)) { PostMessageW(hwnd, WM_APP + 7, 0, 0); return 0; }   // ` 或空格确认圆盘项
         if (g_mode == M_SEARCH) {
             bool c = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
