@@ -598,7 +598,7 @@ static int HitTestPie(POINT p) {
 
 static RECT PanelRect() {
     RECT r;
-    r.left = 24; r.top = 24; r.right = g_winW - 24; r.bottom = g_winH - 24;
+    r.left = 24; r.top = 24; r.right = g_winW - 14; r.bottom = g_winH - 14;
     return r;
 }
 
@@ -1042,11 +1042,12 @@ static void Paint(HWND hwnd) {
 
     {   // 缩放手柄：底边中点、右边中点各三个点
         HBRUSH db = CreateSolidBrush(RGB(140, 140, 148));
-        int cx = g_winW / 2, cy = g_winH / 2;
+        RECT pr = PanelRect();
+        int cx = (pr.left + pr.right) / 2, cy = (pr.top + pr.bottom) / 2;
         for (int i = -1; i <= 1; ++i) {
-            RECT d1 = { cx + i * 8 - 1, g_winH - 7, cx + i * 8 + 2, g_winH - 4 };
+            RECT d1 = { cx + i * 8 - 1, pr.bottom - 9, cx + i * 8 + 2, pr.bottom - 6 };
             FillRect(mem, &d1, db);
-            RECT d2 = { g_winW - 7, cy + i * 8 - 1, g_winW - 4, cy + i * 8 + 2 };
+            RECT d2 = { pr.right - 9, cy + i * 8 - 1, pr.right - 6, cy + i * 8 + 2 };
             FillRect(mem, &d2, db);
         }
         DeleteObject(db);
@@ -1143,6 +1144,7 @@ static void ForceForeground(HWND hwnd) {
 }
 
 static void ShowAtCursor(HWND hwnd) {
+    g_winW = 640; g_winH = 560;   // 每次呼出恢复默认尺寸
     g_mode = M_PIE;
     g_query.clear();
     g_sel = 0;
@@ -1260,9 +1262,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         POINT cp; GetCursorPos(&cp);
         ScreenToClient(hwnd, &cp);
         int edges = 0;
-        if (cp.x >= g_winW - 10) edges |= 1;
-        if (cp.y >= g_winH - 10) edges |= 2;
-        if (edges) {
+        RECT prc = PanelRect();
+        if (cp.x >= prc.right) edges |= 1;
+        if (cp.y >= prc.bottom) edges |= 2;
             LPCWSTR cur = (edges == 3) ? IDC_SIZENWSE : (edges == 1 ? IDC_SIZEWE : IDC_SIZENS);
             SetCursor(LoadCursor(nullptr, cur));
             return TRUE;
@@ -1279,6 +1281,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (nh < 380) nh = 380;
             g_winW = nw; g_winH = nh;
             SetWindowPos(hwnd, HWND_TOP, 0, 0, nw, nh, SWP_NOMOVE | SWP_NOZORDER);
+            SyncEditFromMode();
+            UpdateScrollInfo();
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
         }
@@ -1313,10 +1317,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_LBUTTONDOWN: {
         {
             int ex = (int)GET_X_LPARAM(lp), ey = (int)GET_Y_LPARAM(lp);
+            RECT prr = PanelRect();
             int edges = 0;
-            if (ex >= g_winW - 10) edges |= 1;
-            if (ey >= g_winH - 10) edges |= 2;
-            if (edges) {
+            if (ex >= prr.right) edges |= 1;     // 右侧整条拖拽带
+            if (ey >= prr.bottom) edges |= 2;    // 下方整条拖拽带
                 g_resizing = true;
                 g_resizeEdges = edges;
                 GetCursorPos(&g_resizeStart);
