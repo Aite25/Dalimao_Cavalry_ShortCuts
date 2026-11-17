@@ -1389,6 +1389,7 @@ static void ForceForeground(HWND hwnd) {
 static void ShowAtCursor(HWND hwnd) {
     g_mode = M_PIE;
     g_mod = 0; LoadActive();   // 每次呼出都从"无"开始
+    g_ctrlUsed = true;   // 呼出用的 Ctrl 不算"单独按 Ctrl"，避免一开就切到 Ctrl 版
     g_query.clear();
     g_sel = 0;
     g_hover = -1;
@@ -1955,7 +1956,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     BOOL hk = TRUE;   // 热键改为按需注册（仅 Cavalry 前台）
     Log("hotkey " + Narrow(g_hotkeySpec) + " -> " + (hk ? "ok" : ("FAIL err=" + std::to_string(GetLastError()))));
 
-    SetTimer(hwnd, 1, 10, nullptr);   // 10ms：更快感知前台切换
+    SetTimer(hwnd, 1, 5, nullptr);   // 5ms
 
     WNDCLASSW cc = {};
     cc.lpfnWndProc = CatcherProc;
