@@ -1,4 +1,4 @@
-﻿// hotbox.cpp — Cavalry 径向热盒 v6
+﻿// Cavalry_ShortyCut.cpp — Cavalry 径向热盒 v6
 //
 // 参考 AE 插件 DalimaoShortcuts 的热盒：
 //   · 径向 8 扇区（N/NE/E/SE/S/SW/W/NW）+ 中心圆
@@ -6,11 +6,11 @@
 //   · 扇区热键（1~8 或自定义字母）+ 搜索菜单（Tab / 直接打字）+ 设置菜单（改绑定）
 //
 // 数据：
-//   hotbox.ini   → 呼出快捷键等
-//   hotbox.json  → 8 个扇区的绑定（脚本文件 或 添加图层）
+//   Cavalry_ShortyCut.ini   → 呼出快捷键等
+//   Cavalry_ShortyCut.json  → 8 个扇区的绑定（脚本文件 或 添加图层）
 //   actions/*.js → 脚本动作本体（点的时候才读 → 热更新）
 //
-// 触发：hotbox.ini 里的 hotkey（默认 Alt+Q）；Cavalry 脚本可用 hotbox.exe --show。
+// 触发：Cavalry_ShortyCut.ini 里的 hotkey（默认 Alt+Q）；Cavalry 脚本可用 Cavalry_ShortyCut.exe --show。
 
 #define UNICODE
 #define _UNICODE
@@ -91,7 +91,7 @@ static UINT g_hotkeyMods = MOD_ALT | MOD_NOREPEAT;
 static UINT g_hotkeyVk = 'Q';
 static int g_trayTick = 0;
 static bool g_inMenu = false;
-static bool g_imeOn = true;   // 输入框是否启用输入法（hotbox.ini: ime=off 可关）
+static bool g_imeOn = true;   // 输入框是否启用输入法（Cavalry_ShortyCut.ini: ime=off 可关）
 static bool g_dragging = false;
 static bool g_selAll = false;
 static void SyncEditText();
@@ -187,7 +187,7 @@ static std::wstring ToLower(std::wstring s) {
 }
 
 static void Log(const std::string& s) {
-    std::wstring path = ExeDir() + L"\\hotbox-debug.log";
+    std::wstring path = ExeDir() + L"\\Cavalry_ShortyCut.log";
     FILE* f = nullptr;
     if (_wfopen_s(&f, path.c_str(), L"ab") == 0 && f) {
         SYSTEMTIME st; GetLocalTime(&st);
@@ -206,7 +206,7 @@ static bool HttpCall(const wchar_t* method, const std::wstring& path, const std:
     out.clear();
     status = 0;
 
-    HINTERNET session = WinHttpOpen(L"cavalry-hotbox/0.6", WINHTTP_ACCESS_TYPE_NO_PROXY,
+    HINTERNET session = WinHttpOpen(L"cavalry-shortycut/0.6", WINHTTP_ACCESS_TYPE_NO_PROXY,
                                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) return false;
     WinHttpSetTimeouts(session, 3000, 3000, 8000, 60000);
@@ -455,7 +455,7 @@ static void LoadIndex() {
 
     Log("index: " + std::to_string(g_index.size()) + " items");
 }
-// ---------------------------------------------------------------- 配置 hotbox.json
+// ---------------------------------------------------------------- 配置 Cavalry_ShortyCut.json
 static std::wstring JsonGetStr(const std::string& obj, const char* key) {
     std::string pat = std::string("\"") + key + "\":";
     size_t p = obj.find(pat);
@@ -473,7 +473,7 @@ static std::wstring JsonGetStr(const std::string& obj, const char* key) {
 
 static void SaveSectors();
 static void LoadSectors() {
-    std::wstring path = ExeDir() + L"\\hotbox.json";
+    std::wstring path = ExeDir() + L"\\Cavalry_ShortyCut.json";
     std::string raw = ReadFileUtf8(path);
 
     if (!raw.empty()) {
@@ -533,7 +533,7 @@ static void SaveSectors() {
         out += (i < 7) ? ",\n" : "\n";
     }
     out += "  ]\n}\n";
-    WriteFileUtf8(ExeDir() + L"\\hotbox.json", out);
+    WriteFileUtf8(ExeDir() + L"\\Cavalry_ShortyCut.json", out);
 }
 
 // ---------------------------------------------------------------- 搜索
@@ -1118,9 +1118,9 @@ static bool ParseHotkey(const std::wstring& spec, UINT& mods, UINT& vk) {
 }
 
 static void LoadConfig() {
-    std::wstring path = ExeDir() + L"\\hotbox.ini";
+    std::wstring path = ExeDir() + L"\\Cavalry_ShortyCut.ini";
     if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        WriteFileUtf8(path, "; Cavalry Hotbox\r\n; hotkey: Ctrl/Alt/Shift/Win + A-Z / 0-9 / F1-F24\r\nhotkey=Alt+Q\r\n");
+        WriteFileUtf8(path, "; Cavalry ShortyCut\r\n; hotkey: Ctrl/Alt/Shift/Win + A-Z / 0-9 / F1-F24\r\nhotkey=Alt+Q\r\n");
     }
     std::string raw = ReadFileUtf8(path);
     size_t pos = 0;
@@ -1290,7 +1290,7 @@ static void ShowMenu(HWND hwnd) {
     AppendMenuW(menu, MF_STRING, IDM_ACTIONS, L"打开 actions 文件夹");
     AppendMenuW(menu, MF_STRING, IDM_RELOAD, L"重新读取 actions");
     AppendMenuW(menu, MF_STRING, IDM_LOG, L"查看调试日志");
-    AppendMenuW(menu, MF_STRING, IDM_INI, L"打开 hotbox.ini");
+    AppendMenuW(menu, MF_STRING, IDM_INI, L"打开 Cavalry_ShortyCut.ini");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING, IDM_EXIT, L"退出热盒");
     SetForegroundWindow(hwnd);
@@ -1665,8 +1665,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             case IDM_SETTINGS: g_mode = M_SETTINGS; g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); return 0;
             case IDM_ACTIONS: OpenPath(ExeDir() + L"\\actions"); return 0;
             case IDM_RELOAD: LoadSectors(); LoadIndex(); InvalidateRect(hwnd, nullptr, TRUE); return 0;
-            case IDM_LOG: OpenPath(ExeDir() + L"\\hotbox-debug.log"); return 0;
-            case IDM_INI: OpenPath(ExeDir() + L"\\hotbox.ini"); return 0;
+            case IDM_LOG: OpenPath(ExeDir() + L"\\Cavalry_ShortyCut.log"); return 0;
+            case IDM_INI: OpenPath(ExeDir() + L"\\Cavalry_ShortyCut.ini"); return 0;
             case IDM_EXIT: DestroyWindow(hwnd); return 0;
         }
         return 0;
@@ -1681,7 +1681,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 // ---------------------------------------------------------------- 入口
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     if (cmdLine && wcsstr(cmdLine, L"--show")) {
-        HWND existing = FindWindowW(L"CavalryHotbox", L"Cavalry Hotbox");
+        HWND existing = FindWindowW(L"CavalryShortyCut", L"Cavalry ShortyCut");
         if (existing) { PostMessageW(existing, WM_APP + 1, 0, 0); return 0; }
     }
 
@@ -1692,12 +1692,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     WNDCLASSW wc = {};
     wc.lpfnWndProc = WndProc;
     wc.hInstance = inst;
-    wc.lpszClassName = L"CavalryHotbox";
+    wc.lpszClassName = L"CavalryShortyCut";
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     RegisterClassW(&wc);
 
     HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_LAYERED,
-                                L"CavalryHotbox", L"Cavalry Hotbox", WS_POPUP | WS_CLIPCHILDREN,
+                                L"CavalryShortyCut", L"Cavalry ShortyCut", WS_POPUP | WS_CLIPCHILDREN,
                                 0, 0, g_winW, g_winH, nullptr, nullptr, inst, nullptr);
     g_main = hwnd;
     SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);
@@ -1709,7 +1709,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     LoadIndex();
     LoadSectors();
 
-    HWND msgWnd = CreateWindowExW(0, L"CavalryHotbox", L"", 0, 0, 0, 0, 0,
+    HWND msgWnd = CreateWindowExW(0, L"CavalryShortyCut", L"", 0, 0, 0, 0, 0,
                                   HWND_MESSAGE, nullptr, inst, nullptr);
     BOOL hk = RegisterHotKey(msgWnd ? msgWnd : hwnd, HOTKEY_TOGGLE, g_hotkeyMods, g_hotkeyVk);
     Log("hotkey " + Narrow(g_hotkeySpec) + " -> " + (hk ? "ok" : ("FAIL err=" + std::to_string(GetLastError()))));
@@ -1720,9 +1720,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     WNDCLASSW cc = {};
     cc.lpfnWndProc = CatcherProc;
     cc.hInstance = inst;
-    cc.lpszClassName = L"CavalryHotboxCatcher";
+    cc.lpszClassName = L"CavalryShortyCutCatcher";
     RegisterClassW(&cc);
-    g_catcher = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST, L"CavalryHotboxCatcher", L"", WS_POPUP,
+    g_catcher = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST, L"CavalryShortyCutCatcher", L"", WS_POPUP,
                                 0, 0, 100, 100, nullptr, nullptr, inst, nullptr);
     if (g_catcher) SetLayeredWindowAttributes(g_catcher, 0, 1, LWA_ALPHA);   // 几乎全透明但能收点击
 

@@ -1,4 +1,4 @@
-# 构建产物
+﻿# 构建产物
 *.obj
 *.pdb
 *.ilk
@@ -6,6 +6,6 @@
 *.lib
 build/
 # 运行时日志
-hotbox-debug.log
+Cavalry_ShortyCut.log
 # 备份
 *.bak

@@ -16,10 +16,10 @@ Cavalry 本身**无法**唤起它，也无法提供"能自己关闭的窗口"—
 ## 1. 架构
 
 ```
-hotbox.exe ──HTTP──▶ cavalry_bridge.mjs (127.0.0.1:6769) ──MCP/SSE──▶ Cavalry (127.0.0.1:6768)
+Cavalry_ShortyCut.exe ──HTTP──▶ cavalry_bridge.mjs (127.0.0.1:6769) ──MCP/SSE──▶ Cavalry (127.0.0.1:6768)
    │
-   ├─ hotbox.ini   呼出热键
-   ├─ hotbox.json  8 扇区绑定（script / layer）
+   ├─ Cavalry_ShortyCut.ini   呼出热键
+   ├─ Cavalry_ShortyCut.json  8 扇区绑定（script / layer）
    ├─ actions/*.js 动作脚本（点的时候才读 → 热更新）
    └─ layer-types.txt  280 个图层类型（从 Cavalry 一次性导出）
 ```
@@ -210,7 +210,7 @@ tray icon FAIL err=5     ← ERROR_ACCESS_DENIED
 
 **现在的做法（必须坚持）**：
 
-1. 改之前先 `Copy-Item hotbox.cpp hotbox.cpp.bak`；
+1. 改之前先 `Copy-Item Cavalry_ShortyCut.cpp Cavalry_ShortyCut.cpp.bak`；
 2. 用**行号**或**整段重写**，不用模糊字符串锚点；
 3. 改完立刻 `Select-String` 回读，确认代码真的写进去了；
 4. 再编译；编译不过就回滚，不在坏文件上继续叠改；
@@ -222,7 +222,7 @@ tray icon FAIL err=5     ← ERROR_ACCESS_DENIED
 
 | 手段 | 用途 |
 |---|---|
-| `hotbox-debug.log` 逐事件写入 | 判断"消息有没有到"（`WM_HOTKEY` / `WM_CHAR` / `focus`） |
+| `Cavalry_ShortyCut.log` 逐事件写入 | 判断"消息有没有到"（`WM_HOTKEY` / `WM_CHAR` / `focus`） |
 | `PostMessage(hwnd, WM_KEYDOWN, ...)` | 定向测试某个分支，不受前台窗口干扰 |
 | `EnumChildWindows` + `GetWindowRect` | 确认控件是否创建、位置尺寸对不对 |
 | 全屏截图（`CopyFromScreen`） | 验证自绘 UI 的真实观感 |
@@ -246,9 +246,9 @@ tray icon FAIL err=5     ← ERROR_ACCESS_DENIED
 
 | 文件 | 作用 |
 |---|---|
-| `hotbox.cpp` | 全部逻辑：热键、绘制、搜索、设置、HTTP 调用桥 |
-| `hotbox.ini` | `hotkey=Alt+Q` |
-| `hotbox.json` | 8 扇区绑定（`kind`: `script` / `layer`） |
+| `Cavalry_ShortyCut.cpp` | 全部逻辑：热键、绘制、搜索、设置、HTTP 调用桥 |
+| `Cavalry_ShortyCut.ini` | `hotkey=Alt+Q` |
+| `Cavalry_ShortyCut.json` | 8 扇区绑定（`kind`: `script` / `layer`） |
 | `actions/*.js` | 动作脚本，点击时读取（热更新） |
 | `layer-types.txt` | 280 个图层类型，`名称\t类型` |
 | `README.md` | 使用说明 |
@@ -278,10 +278,10 @@ tray icon FAIL err=5     ← ERROR_ACCESS_DENIED
 | **自绘滚动条**（深色细轨 + 圆角滑块，拖动/点轨/滚轮） | ✅ |
 | 右键直接隐藏 | ✅ |
 | 中键拖动窗口 | ✅ |
-| 设置（`F2` / 齿轮）：左预览 + 右绑定列表 → `hotbox.json` | ✅ |
+| 设置（`F2` / 齿轮）：左预览 + 右绑定列表 → `Cavalry_ShortyCut.json` | ✅ |
 | 动作热更新（点击时才读 `actions/*.js`） | ✅ |
 
-> 现在出问题时的第一步：看 `hotbox-debug.log` 最后几行的时间戳，
+> 现在出问题时的第一步：看 `Cavalry_ShortyCut.log` 最后几行的时间戳，
 > 如果停留在几分钟前，说明**进程根本没在跑**（不是代码 bug）。
 ---
 
@@ -337,4 +337,4 @@ SetLayeredWindowAttributes(hwnd, RGB(0,0,0), 255, LWA_COLORKEY);
 2. 用**行号插入/整段替换**，不用模糊字符串；
 3. 改完 `Select-String` **计数验证关键行**（如 `mousemove-resize=1`），再编译；
 4. **编译通过才 `git commit`**（这一轮曾在编译失败时提交，产生了两个坏提交，后来回滚）；
-5. 每轮结束在 `hotbox-debug.log` 和 UI 上各确认一次。
+5. 每轮结束在 `Cavalry_ShortyCut.log` 和 UI 上各确认一次。
