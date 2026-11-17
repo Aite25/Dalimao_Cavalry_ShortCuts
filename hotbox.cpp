@@ -306,7 +306,12 @@ static void SyncEditFromMode();
 #define ID_SCROLL 4002
 
 static LRESULT CALLBACK EditSubclass(HWND h, UINT m, WPARAM w, LPARAM l, UINT_PTR id, DWORD_PTR ref) {
+    if (m == WM_CHAR && w <= 27) return 0;   // 吞掉 Ctrl 组合产生的控制字符，避免提示音
     if (m == WM_KEYDOWN) {
+    if (m == WM_KEYDOWN && w == 'A' && (GetKeyState(VK_CONTROL) & 0x8000)) {
+        SendMessageW(h, EM_SETSEL, (WPARAM)0, (LPARAM)-1);
+        return 0;
+    }
         if (w == VK_ESCAPE || w == VK_RETURN || w == VK_UP || w == VK_DOWN) {
             PostMessageW(g_main, WM_KEYDOWN, w, 0);
             return 0;
