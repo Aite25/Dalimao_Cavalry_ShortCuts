@@ -236,26 +236,26 @@ static void DrawPieTabs(HDC dc) {
     for (int i = 0; i < 4; ++i) {
         RECT r = TabBoxRect(i);
         bool on = (i == g_box);
-        FillRound(dc, r, 5, on ? kRowSel : RGB(46, 46, 50), on ? kRowSel : RGB(60, 60, 64));
         SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, on ? RGB(255, 255, 255) : RGB(190, 190, 195));
-        HFONT f = MakeFont(13);
+        SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
+        HFONT f = MakeFont(14, on);
         HGDIOBJ of = SelectObject(dc, f);
         DrawTextW(dc, boxLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         SelectObject(dc, of);
         DeleteObject(f);
+        if (on) { RECT u = { r.left + 8, r.bottom - 2, r.right - 8, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
     }
     for (int i = 0; i < 4; ++i) {
         RECT r = TabModRect(i);
         bool on = (i == g_mod);
-        FillRound(dc, r, 5, on ? kRowSel : RGB(46, 46, 50), on ? kRowSel : RGB(60, 60, 64));
         SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, on ? RGB(255, 255, 255) : RGB(190, 190, 195));
-        HFONT f = MakeFont(13);
+        SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
+        HFONT f = MakeFont(13, on);
         HGDIOBJ of = SelectObject(dc, f);
         DrawTextW(dc, modLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         SelectObject(dc, of);
         DeleteObject(f);
+        if (on) { RECT u = { r.left + 4, r.bottom - 2, r.right - 4, r.bottom }; HBRUSH ub = CreateSolidBrush(kRowSel); FillRect(dc, &u, ub); DeleteObject(ub); }
     }
 }
 // ---------------------------------------------------------------- 图标（Add Layers 同款）
