@@ -827,7 +827,7 @@ static void DrawPie(HDC dc) {
     for (int i = 0; i < 8; ++i) {
         RECT r = SectorRect(i);
         bool sel = (i == g_hover);
-        FillRound(dc, r, 8, kSectorFill, sel ? kRowSel : kSectorBorder);   // 选中：蓝色描边
+        FillRound(dc, r, 8, sel ? kSectorSel : kSectorFill, sel ? kRowSel : kSectorBorder);   // 选中：灰底 + 蓝框
 
         SetBkMode(dc, TRANSPARENT);
         HFONT f = MakeFont(15);
