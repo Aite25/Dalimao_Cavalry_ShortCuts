@@ -236,6 +236,7 @@ static void DrawPieTabs(HDC dc) {
     for (int i = 0; i < 4; ++i) {
         RECT r = TabBoxRect(i);
         bool on = (i == g_box);
+        FillRound(dc, r, 4, on ? RGB(52, 54, 60) : RGB(36, 36, 40), on ? RGB(70, 74, 84) : RGB(52, 52, 58));
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
         HFONT f = MakeFont(14, on);
@@ -248,6 +249,7 @@ static void DrawPieTabs(HDC dc) {
     for (int i = 0; i < 4; ++i) {
         RECT r = TabModRect(i);
         bool on = (i == g_mod);
+        FillRound(dc, r, 4, on ? RGB(52, 54, 60) : RGB(36, 36, 40), on ? RGB(70, 74, 84) : RGB(52, 52, 58));
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
         HFONT f = MakeFont(13, on);
