@@ -1143,6 +1143,15 @@ static void LoadConfig() {
     }
 }
 
+
+// ---------------------------------------------------------------- 鼠标钩子（圆盘外部确认）
+static HHOOK g_mouseHook = nullptr;
+static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode == HC_ACTION && wParam == WM_LBUTTONDOWN && g_main && IsWindowVisible(g_main) && g_mode == M_PIE) {
+        PostMessageW(g_main, WM_APP + 7, 0, 0);
+    }
+    return CallNextHookEx(g_mouseHook, nCode, wParam, lParam);
+}
 // ---------------------------------------------------------------- 窗口
 #define HOTKEY_TOGGLE 1
 #define IDM_ACTIONS 3003
@@ -1261,6 +1270,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             int hv = HitTestPie(cl);
             if (hv < 0) hv = -1;
             if (hv != g_hover) { g_hover = hv; InvalidateRect(hwnd, nullptr, FALSE); }
+            {
+                static bool prevDown = false;
+                bool nowDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+                if (nowDown && !prevDown) Log("pie click: hover=" + std::to_string(g_hover));
+                prevDown = nowDown;
+            }
             if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) {
                 bool outside = (cl.x < 0 || cl.y < 0 || cl.x >= g_winW || cl.y >= g_winH);
                 if (g_hover >= 0 && g_slots[g_hover].used) {
@@ -1562,6 +1577,16 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         return 0;
     }
+    case WM_APP + 7:
+        if (g_mode == M_PIE) {
+            if (g_hover >= 0 && g_slots[g_hover].used) {
+                Item it{ g_slots[g_hover].name, g_slots[g_hover].kind, g_slots[g_hover].value };
+                RunItem(it);
+            } else {
+                ShowWindow(hwnd, SW_HIDE);
+            }
+        }
+        return 0;
     case WM_APP + 5:
         if (g_mode == M_SEARCH && wp >= 1 && wp <= 6) {
             g_sel = g_scroll + (int)wp - 1;
@@ -1646,6 +1671,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     Log("hotkey " + Narrow(g_hotkeySpec) + " -> " + (hk ? "ok" : ("FAIL err=" + std::to_string(GetLastError()))));
 
     SetTimer(hwnd, 1, 25, nullptr);
+    g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, LowLevelMouseProc, GetModuleHandleW(nullptr), 0);
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
