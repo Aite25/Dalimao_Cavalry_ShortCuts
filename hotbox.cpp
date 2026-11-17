@@ -606,7 +606,7 @@ static RECT RowRect(int i);
 
 static int VisibleRows() {
     int h = PanelRect().bottom - (RowRect(0).top) - 6;
-    int n = h / 32;
+    int n = h / 26;
     if (n < 3) n = 3;
     if (n > 12) n = 12;
     return n;
@@ -617,7 +617,7 @@ static RECT RowRect(int i) {
     RECT r;
     r.left = p.left + 16;
     r.right = p.right - 34;
-    r.top = p.top + 112 + i * 32;
+    r.top = p.top + 112 + i * 26;
     r.bottom = r.top + 26;
     return r;
 }
@@ -861,7 +861,7 @@ static RECT SettingRowRect(int i) {
     RECT r;
     r.left = p.left + 232;
     r.right = p.right - 16;
-    r.top = p.top + 112 + i * 32;
+    r.top = p.top + 112 + i * 26;
     r.bottom = r.top + 26;
     return r;
 }
@@ -1291,7 +1291,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_mode == M_SEARCH) {
             POINT mp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
             int hr = -1;
-            for (int rr = 0; rr < 7; ++rr) {
+            for (int rr = 0; rr < VisibleRows(); ++rr) {
                 RECT rrr = RowRect(rr);
                 if (mp.x >= rrr.left && mp.x < rrr.right && mp.y >= rrr.top && mp.y < rrr.bottom) { hr = g_scroll + rr; break; }
             }
