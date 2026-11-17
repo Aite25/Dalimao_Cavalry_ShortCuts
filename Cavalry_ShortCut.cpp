@@ -1249,6 +1249,8 @@ static bool ParseHotkey(const std::wstring& spec, UINT& mods, UINT& vk) {
         if (low == L"alt")                       { mods |= MOD_ALT;     continue; }
         if (low == L"shift")                     { mods |= MOD_SHIFT;   continue; }
         if (low == L"win")                       { mods |= MOD_WIN;     continue; }
+        if (token == L"`") { vk = VK_OEM_3; continue; }   // 反引号
+        if (token == L" " || token == L"space") { vk = VK_SPACE; continue; }
         if (token.size() == 1) {
             wchar_t c = (wchar_t)towupper(token[0]);
             if ((c >= L'A' && c <= L'Z') || (c >= L'0' && c <= L'9')) { vk = (UINT)c; continue; }
