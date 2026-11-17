@@ -53,7 +53,7 @@ static const COLORREF kRowSel       = RGB(56, 119, 181);
 
 static const int kCenterR  = 36;
 static const int kRectW    = 150;
-static const int kRectH    = 44;
+static const int kRectH    = 34;
 static const int kOffVert  = 118;
 static const int kOffHoriz = 172;
 static const int kOffDiagX = 105;
@@ -605,8 +605,8 @@ static RECT PanelRect() {
 static RECT RowRect(int i);
 
 static int VisibleRows() {
-    int h = PanelRect().bottom - (RowRect(0).top);
-    int n = h / 38;
+    int h = PanelRect().bottom - (RowRect(0).top) - 6;
+    int n = h / 32;
     if (n < 3) n = 3;
     if (n > 12) n = 12;
     return n;
@@ -617,8 +617,8 @@ static RECT RowRect(int i) {
     RECT r;
     r.left = p.left + 16;
     r.right = p.right - 34;
-    r.top = p.top + 118 + i * 38;
-    r.bottom = r.top + 34;
+    r.top = p.top + 112 + i * 32;
+    r.bottom = r.top + 26;
     return r;
 }
 
@@ -861,8 +861,8 @@ static RECT SettingRowRect(int i) {
     RECT r;
     r.left = p.left + 232;
     r.right = p.right - 16;
-    r.top = p.top + 118 + i * 38;
-    r.bottom = r.top + 34;
+    r.top = p.top + 112 + i * 32;
+    r.bottom = r.top + 26;
     return r;
 }
 
@@ -997,7 +997,7 @@ static void DrawTopIcons(HDC dc) {
     // 齿轮
     RECT gr = IconRect(0);   // 设置在右
     int cx = (gr.left + gr.right) / 2, cy = (gr.top + gr.bottom) / 2;
-    int r1 = 9, r2 = 5;
+    int r1 = 6, r2 = 3;
     Ellipse(dc, cx - r1, cy - r1, cx + r1, cy + r1);
     Ellipse(dc, cx - r2, cy - r2, cx + r2, cy + r2);
     for (int i = 0; i < 8; ++i) {
