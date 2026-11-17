@@ -1716,6 +1716,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
 
     SetTimer(hwnd, 1, 25, nullptr);
     g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, LowLevelMouseProc, GetModuleHandleW(nullptr), 0);
+    if (g_mouseHook) { UnhookWindowsHookEx(g_mouseHook); g_mouseHook = nullptr; }
 
     WNDCLASSW cc = {};
     cc.lpfnWndProc = CatcherProc;
