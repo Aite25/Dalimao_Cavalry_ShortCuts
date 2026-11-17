@@ -78,7 +78,8 @@ struct Slot {
 static Slot g_slots[8];          // 当前激活的一组
 static Slot g_store[16][8];      // [box*4+mod][slot]
 static int  g_box = 0;           // 0..3（热盒 1..4）
-static int  g_mod = 0;           // 0=无 1=Ctrl 2=Shift 3=Alt
+static int  g_mod = 0;
+static bool g_ctrlUsed = false;   // Ctrl 是否被当作组合键使用           // 0=无 1=Ctrl 2=Shift 3=Alt
 
 
 struct Item {
@@ -205,9 +206,9 @@ static void LoadActive();
 // ---------------------------------------------------------------- 顶部页签（热盒 1-4 / 修饰键）
 static RECT TabBoxRect(int i) {   // 第一行：1..4
     RECT r;
-    r.left = 24 + i * 46;
+    r.left = 24 + i * 62;
     r.top = 24;
-    r.right = r.left + 46;
+    r.right = r.left + 62;
     r.bottom = r.top + 24;
     return r;
 }
@@ -230,7 +231,7 @@ static void SwitchSet(int box, int mod) {
 }
 
 static void DrawPieTabs(HDC dc) {
-    const wchar_t* boxLabels[4] = { L"1", L"2", L"3", L"4" };
+    const wchar_t* boxLabels[4] = { L"Ctrl+1", L"Ctrl+2", L"Ctrl+3", L"Ctrl+4" };
     const wchar_t* modLabels[4] = { L"无", L"Ctrl", L"Shift", L"Alt" };
 
     for (int i = 0; i < 4; ++i) {
@@ -1376,6 +1377,7 @@ static void ForceForeground(HWND hwnd) {
 
 static void ShowAtCursor(HWND hwnd) {
     g_mode = M_PIE;
+    g_mod = 0; LoadActive();   // 每次呼出都从"无"开始
     g_query.clear();
     g_sel = 0;
     g_hover = -1;
@@ -1755,6 +1757,14 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         break;
     }
+    case WM_KEYUP:
+        if (g_mode == M_PIE && wp == VK_CONTROL) {
+            if (!g_ctrlUsed) SwitchSet(g_box, (g_mod == 1) ? 0 : 1);
+            g_ctrlUsed = false;
+            InvalidateRect(hwnd, nullptr, TRUE);
+            return 0;
+        }
+        break;
     case WM_SYSKEYDOWN:
         if (g_mode == M_PIE && wp == VK_MENU) { SwitchSet(g_box, (g_mod == 3) ? 0 : 3); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         break;
@@ -1771,8 +1781,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;   // 吞掉，避免系统提示音
         }
         if (g_mode == M_PIE) {
-            if (wp >= '1' && wp <= '4') { SwitchSet(wp - '1', g_mod); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
-            if (wp == VK_CONTROL) { SwitchSet(g_box, (g_mod == 1) ? 0 : 1); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            if ((GetKeyState(VK_CONTROL) & 0x8000) && wp >= '1' && wp <= '4') { g_ctrlUsed = true; SwitchSet(wp - '1', g_mod); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            if (wp == VK_CONTROL) { g_ctrlUsed = false; return 0; }   // Ctrl：等松开时再判断是否单独按
             if (wp == VK_SHIFT)   { SwitchSet(g_box, (g_mod == 2) ? 0 : 2); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
             if (wp == VK_MENU)    { SwitchSet(g_box, (g_mod == 3) ? 0 : 3); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         }
