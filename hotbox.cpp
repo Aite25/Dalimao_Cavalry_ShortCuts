@@ -1040,6 +1040,16 @@ static void Paint(HWND hwnd) {
 
     if (g_mode != M_SETTINGS) DrawTopIcons(mem);   // 设置页右上角是关闭按钮
 
+    {   // 右下角三个点：提示这里可以拖动缩放
+        HBRUSH db = CreateSolidBrush(RGB(140, 140, 148));
+        int bx = g_winW - 22, by = g_winH - 22;
+        for (int i = 0; i < 3; ++i) {
+            RECT d = { bx + i * 6, by + i * 6, bx + i * 6 + 3, by + i * 6 + 3 };
+            FillRect(mem, &d, db);
+        }
+        DeleteObject(db);
+    }
+
     BitBlt(dc, 0, 0, g_winW, g_winH, mem, 0, 0, SRCCOPY);
     SelectObject(mem, old);
     DeleteObject(bmp);
@@ -1320,7 +1330,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             RECT pill = { a.left - 8, a.top - 6, b2.right + 8, b2.bottom + 6 };
             if (p.x >= pill.left && p.x < pill.right && p.y >= pill.top && p.y < pill.bottom) {
                 int mid = (a.left + b2.right) / 2;
-                if (p.x < mid) ShellExecuteW(nullptr, L"open", L"explorer.exe", (L"\"" + ExeDir() + L"\\actions\"").c_str(), nullptr, SW_SHOWNORMAL);
+                if (p.x < mid) ShellExecuteW(nullptr, L"open", L"C:\\Windows\\explorer.exe", (L"\"" + ExeDir() + L"\\actions\"").c_str(), nullptr, SW_SHOWNORMAL);
                 else { g_mode = M_SETTINGS; g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); }
                 return 0;
             }
@@ -1360,6 +1370,14 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
         } else if (g_mode == M_SETTINGS) {
+            {   // 右上角 × ：关闭设置页
+                RECT xr = IconRect(0);
+                if (p.x >= xr.left - 6 && p.x < xr.right + 6 && p.y >= xr.top - 6 && p.y < xr.bottom + 6) {
+                    g_mode = M_PIE;
+                    InvalidateRect(hwnd, nullptr, TRUE);
+                    return 0;
+                }
+            }
             for (int i = 0; i < 8; ++i) {
                 RECT r = SettingRowRect(i);
                 if (p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom) {
