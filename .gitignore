@@ -1,0 +1,11 @@
+# 构建产物
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+build/
+# 运行时日志
+hotbox-debug.log
+# 备份
+*.bak

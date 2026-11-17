@@ -1,0 +1,12 @@
+{
+  "sectors": [
+    {"name":"Duplicator", "kind":"script", "value":"Duplicator.js", "key":"1"},
+    {"name":"Math", "kind":"script", "value":"Math.js", "key":"2"},
+    {"name":"Number Range", "kind":"script", "value":"Number Range.js", "key":"3"},
+    {"name":"", "kind":"", "value":"", "key":""},
+    {"name":"", "kind":"", "value":"", "key":""},
+    {"name":"", "kind":"", "value":"", "key":""},
+    {"name":"", "kind":"", "value":"", "key":""},
+    {"name":"", "kind":"", "value":"", "key":""}
+  ]
+}
