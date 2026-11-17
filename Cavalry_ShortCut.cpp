@@ -75,7 +75,11 @@ struct Slot {
     std::wstring key;     // 扇区热键（单个字符，可空）
     bool used = false;
 };
-static Slot g_slots[8];
+static Slot g_slots[8];          // 当前激活的一组
+static Slot g_store[16][8];      // [box*4+mod][slot]
+static int  g_box = 0;           // 0..3（热盒 1..4）
+static int  g_mod = 0;           // 0=无 1=Ctrl 2=Shift 3=Alt
+
 
 struct Item {
     std::wstring name;
@@ -523,65 +527,86 @@ static std::wstring JsonGetStr(const std::string& obj, const char* key) {
 }
 
 static void SaveSectors();
+static void LoadActive() {
+    int idx = g_box * 4 + g_mod;
+    for (int i = 0; i < 8; ++i) g_slots[i] = g_store[idx][i];
+}
+
+static void SaveActive() {
+    int idx = g_box * 4 + g_mod;
+    for (int i = 0; i < 8; ++i) g_store[idx][i] = g_slots[i];
+}
+
 static void LoadSectors() {
+    for (int b = 0; b < 16; ++b) for (int i = 0; i < 8; ++i) g_store[b][i] = Slot();
+
     std::wstring path = ExeDir() + L"\\Cavalry_ShortCut.json";
     std::string raw = ReadFileUtf8(path);
 
-    if (!raw.empty()) {
-        // 极简解析：按 "name" 分段取 name/kind/value/key
-        size_t pos = 0;
-        int idx = 0;
-        while (idx < 8 && (pos = raw.find("\"name\"", pos)) != std::string::npos) {
-            size_t segEnd = raw.find("}", pos);
-            std::string seg = raw.substr(pos, segEnd == std::string::npos ? std::string::npos : segEnd - pos);
-            g_slots[idx].name = JsonGetStr(seg, "name");
-            g_slots[idx].kind = JsonGetStr(seg, "kind");
-            g_slots[idx].value = JsonGetStr(seg, "value");
-            g_slots[idx].key = JsonGetStr(seg, "key");
-            g_slots[idx].used = !g_slots[idx].value.empty();
-            if (g_slots[idx].kind.empty()) g_slots[idx].kind = L"script";
-            ++idx;
-            pos = segEnd == std::string::npos ? raw.size() : segEnd;
-        }
-        return;
+    std::vector<std::string> segs;
+    size_t pos = 0;
+    while ((pos = raw.find("\"name\"", pos)) != std::string::npos) {
+        size_t segEnd = raw.find("}", pos);
+        segs.push_back(raw.substr(pos, segEnd == std::string::npos ? std::string::npos : segEnd - pos));
+        pos = (segEnd == std::string::npos) ? raw.size() : segEnd;
     }
 
-    // 没有配置 → 用 actions 目录生成默认绑定
-    std::wstring dir = ExeDir() + L"\\actions";
-    WIN32_FIND_DATAW fd = {};
-    HANDLE h = FindFirstFileW((dir + L"\\*.js").c_str(), &fd);
-    std::vector<Item> scripts;
-    if (h != INVALID_HANDLE_VALUE) {
-        do {
-            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
-            std::wstring name = fd.cFileName;
-            Item it;
-            it.name = name.substr(0, name.find_last_of(L'.'));
-            it.kind = L"script";
-            it.value = name;
-            scripts.push_back(it);
-        } while (FindNextFileW(h, &fd));
-        FindClose(h);
+    int total = (int)segs.size();
+    for (int i = 0; i < total && i < 128; ++i) {
+        Slot s;
+        s.name = JsonGetStr(segs[i], "name");
+        s.kind = JsonGetStr(segs[i], "kind");
+        s.value = JsonGetStr(segs[i], "value");
+        s.key = JsonGetStr(segs[i], "key");
+        s.used = !s.value.empty();
+        if (s.kind.empty()) s.kind = L"script";
+        g_store[i / 8][i % 8] = s;
     }
-    std::sort(scripts.begin(), scripts.end(), [](const Item& a, const Item& b) { return a.name < b.name; });
-    for (size_t i = 0; i < scripts.size() && i < 8; ++i) {
-        g_slots[i].name = scripts[i].name;
-        g_slots[i].kind = scripts[i].kind;
-        g_slots[i].value = scripts[i].value;
-        g_slots[i].key = std::to_wstring(i + 1);
-        g_slots[i].used = true;
+    if (total == 8) {   // 旧格式：复制到其余 15 组
+        for (int b = 1; b < 16; ++b) for (int i = 0; i < 8; ++i) g_store[b][i] = g_store[0][i];
     }
-    SaveSectors();
+
+    if (total == 0) {   // 空配置：用 actions 目录生成默认绑定
+        std::wstring dir = ExeDir() + L"\\actions";
+        WIN32_FIND_DATAW fd = {};
+        HANDLE h = FindFirstFileW((dir + L"\\*.js").c_str(), &fd);
+        std::vector<std::pair<std::wstring, std::wstring>> found;
+        if (h != INVALID_HANDLE_VALUE) {
+            do {
+                if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+                std::wstring nm = fd.cFileName;
+                found.push_back({ nm.substr(0, nm.find_last_of(L'.')), nm });
+            } while (FindNextFileW(h, &fd));
+            FindClose(h);
+        }
+        std::sort(found.begin(), found.end());
+        for (size_t i = 0; i < found.size() && i < 8; ++i) {
+            g_store[0][i].name = found[i].first;
+            g_store[0][i].kind = L"script";
+            g_store[0][i].value = found[i].second;
+            g_store[0][i].key = std::to_wstring(i + 1);
+            g_store[0][i].used = true;
+        }
+        for (int b = 1; b < 16; ++b) for (int i = 0; i < 8; ++i) g_store[b][i] = g_store[0][i];
+        SaveSectors();
+    }
+    LoadActive();
 }
 
+static void SaveSectors();
+
 static void SaveSectors() {
-    std::string out = "{\n  \"sectors\": [\n";
-    for (int i = 0; i < 8; ++i) {
-        out += "    {\"name\":\"" + EscapeJson(Narrow(g_slots[i].name)) + "\", "
-               "\"kind\":\"" + EscapeJson(Narrow(g_slots[i].kind)) + "\", "
-               "\"value\":\"" + EscapeJson(Narrow(g_slots[i].value)) + "\", "
-               "\"key\":\"" + EscapeJson(Narrow(g_slots[i].key)) + "\"}";
-        out += (i < 7) ? ",\n" : "\n";
+    SaveActive();
+    std::string out = "{\n  \"sets\": [\n";
+    for (int b = 0; b < 16; ++b) {
+        out += "    [\n";
+        for (int i = 0; i < 8; ++i) {
+            const Slot& s = g_store[b][i];
+            out += "      {\"name\":\"" + EscapeJson(Narrow(s.name)) + "\", \"kind\":\"" + EscapeJson(Narrow(s.kind)) +
+                   "\", \"value\":\"" + EscapeJson(Narrow(s.value)) + "\", \"key\":\"" + EscapeJson(Narrow(s.key)) + "\"}";
+            out += (i < 7) ? ",\n" : "\n";
+        }
+        out += (b < 15) ? "    ],\n" : "    ]\n";
     }
     out += "  ]\n}\n";
     WriteFileUtf8(ExeDir() + L"\\Cavalry_ShortCut.json", out);
