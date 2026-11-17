@@ -763,10 +763,12 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
 static RECT ScrollTrackRect() {
     RECT p = PanelRect();
     RECT r;
-    r.right = p.right - 16;
+    RECT r0 = RowRect(0);
+    RECT r6 = RowRect(6);
+    r.right = r0.right + 10;
     r.left = r.right - 6;
-    r.top = p.top + 110;
-    r.bottom = r.top + 7 * 38 - 4;
+    r.top = r0.top + 6;
+    r.bottom = r6.bottom + 6;
     return r;
 }
 
@@ -939,6 +941,13 @@ static void DrawTabs(HDC dc) {
     }
 }
 static void DrawTopIcons(HDC dc) {
+    // 图标底色：避免落在色键透明区（那边鼠标会穿透到下面的应用）
+    {
+        RECT bg = IconRect(1);
+        RECT bg2 = IconRect(0);
+        RECT pill = { bg.left - 6, bg.top - 4, bg2.right + 6, bg2.bottom + 4 };
+        FillRound(dc, pill, 8, RGB(40, 40, 43), RGB(56, 56, 60));
+    }
     HPEN pen = CreatePen(PS_SOLID, 1, RGB(140, 140, 145));
     HGDIOBJ op = SelectObject(dc, pen);
     HGDIOBJ ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
@@ -1250,7 +1259,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         for (int k = 0; k < 2; ++k) {
             RECT ir = IconRect(k);
             if (p.x >= ir.left && p.x < ir.right && p.y >= ir.top && p.y < ir.bottom) {
-                if (k == 0) OpenPath(ExeDir() + L"\\actions");
+                if (k == 1) OpenPath(ExeDir() + L"\\actions");   // 左：文件夹
                 else { g_mode = M_SETTINGS; g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); }
                 return 0;
             }
