@@ -6,6 +6,6 @@
 *.lib
 build/
 # 运行时日志
-Cavalry_ShortyCut.log
+*.log
 # 备份
 *.bak
