@@ -608,7 +608,7 @@ static int VisibleRows() {
     int h = PanelRect().bottom - (RowRect(0).top) - 6;
     int n = h / 26;
     if (n < 3) n = 3;
-    if (n > 12) n = 12;
+    if (n > 30) n = 30;
     return n;
 }
 
