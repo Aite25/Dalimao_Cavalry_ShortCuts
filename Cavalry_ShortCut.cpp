@@ -760,28 +760,27 @@ static void DrawPie(HDC dc) {
 
     // 中心圆 + 弧线
     int cx = CenterX(), cy = CenterY();
-    HBRUSH b = CreateSolidBrush(kCenterFill);
-    HPEN p = CreatePen(PS_SOLID, 3, kCenterBorder);
-    HGDIOBJ ob = SelectObject(dc, b), op = SelectObject(dc, p);
-    Ellipse(dc, cx - kCenterR, cy - kCenterR, cx + kCenterR, cy + kCenterR);
-    SelectObject(dc, ob); SelectObject(dc, op);
-    DeleteObject(b); DeleteObject(p);
-    if (g_hover >= 0) {
-        RECT r = SectorRect(g_hover);
-        double tx = (r.left + r.right) / 2.0 - cx, ty = (r.top + r.bottom) / 2.0 - cy;
-        double ang = atan2(ty, tx);
-        int ar = kCenterR - 9;   // 弧线画在中心圆内部（AE 版）
-        HPEN pen = CreatePen(PS_SOLID, 3, kArcColor);
-        HGDIOBJ op = SelectObject(dc, pen);
-        HGDIOBJ ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-        for (int i = 0; i < 18; ++i) {
-            double a1 = ang - 0.5 + 1.0 * i / 18.0;
-            double a2 = ang - 0.5 + 1.0 * (i + 1) / 18.0;
-            MoveToEx(dc, cx + (int)(cos(a1) * ar), cy + (int)(sin(a1) * ar), nullptr);
-            LineTo(dc, cx + (int)(cos(a2) * ar), cy + (int)(sin(a2) * ar));
+    // 中心圆 + 弧线：GDI+ 抗锯齿
+    {
+        Gdiplus::Graphics g(dc);
+        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        Gdiplus::SolidBrush ffill(Gdiplus::Color(255, 38, 38, 38));
+        Gdiplus::Pen bborder(Gdiplus::Color(255, 31, 31, 31), 2.0f);
+        g.FillEllipse(&ffill, cx - kCenterR, cy - kCenterR, kCenterR * 2, kCenterR * 2);
+        g.DrawEllipse(&bborder, cx - kCenterR, cy - kCenterR, kCenterR * 2, kCenterR * 2);
+
+        if (g_hover >= 0) {
+            RECT r = SectorRect(g_hover);
+            double dx = (r.left + r.right) / 2.0 - cx;
+            double dy = (r.top + r.bottom) / 2.0 - cy;
+            double angDeg = atan2(dy, dx) * 180.0 / 3.14159265358979;
+            int ar = kCenterR - 8;
+            Gdiplus::Pen arcPen(Gdiplus::Color(255, 56, 119, 181), 3.0f);
+            arcPen.SetStartCap(Gdiplus::LineCapRound);
+            arcPen.SetEndCap(Gdiplus::LineCapRound);
+            g.DrawArc(&arcPen, (REAL)(cx - ar), (REAL)(cy - ar), (REAL)(ar * 2), (REAL)(ar * 2),
+                      (REAL)(angDeg - 28.0), (REAL)56.0);
         }
-        SelectObject(dc, ob); SelectObject(dc, op);
-        DeleteObject(pen);
     }
 
     SetBkMode(dc, TRANSPARENT);
