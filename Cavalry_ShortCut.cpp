@@ -243,7 +243,7 @@ static void DrawPieTabs(HDC dc) {
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
-        HFONT f = MakeFont(13, false);
+        HFONT f = MakeFont(13, on);
         HGDIOBJ of = SelectObject(dc, f);
         SetTextAlign(dc, TA_LEFT | TA_TOP);
         DrawTextW(dc, boxLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
@@ -260,7 +260,7 @@ static void DrawPieTabs(HDC dc) {
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(235, 240, 250) : RGB(140, 140, 146));
-        HFONT f = MakeFont(13, false);
+        HFONT f = MakeFont(13, on);
         HGDIOBJ of = SelectObject(dc, f);
         SetTextAlign(dc, TA_LEFT | TA_TOP);
         DrawTextW(dc, modLabels[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
@@ -815,7 +815,7 @@ static void UpdateScrollInfo() {
 
 // ---------------------------------------------------------------- 绘制
 static HFONT MakeFont(int px, bool bold) {
-    return CreateFontW(-px, 0, 0, 0, bold ? FW_SEMIBOLD : FW_NORMAL, FALSE, FALSE, FALSE,
+    return CreateFontW(px, 0, 0, 0, bold ? FW_SEMIBOLD : FW_NORMAL, FALSE, FALSE, FALSE,
                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
 }
