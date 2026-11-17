@@ -1058,18 +1058,6 @@ static void Paint(HWND hwnd) {
         DeleteObject(gb);
     }
 
-    {   // grips: bottom-mid and right-mid, inside panel
-        HBRUSH db = CreateSolidBrush(RGB(140, 140, 148));
-        RECT pr = PanelRect();
-        int cxp = (pr.left + pr.right) / 2, cyp = (pr.top + pr.bottom) / 2;
-        for (int i = -1; i <= 1; ++i) {
-            RECT d1 = { cxp + i * 8 - 1, pr.bottom - 9, cxp + i * 8 + 2, pr.bottom - 6 };
-            RECT d2 = { pr.right - 9, cyp + i * 8 - 1, pr.right - 6, cyp + i * 8 + 2 };
-            FillRect(mem, &d1, db);
-            FillRect(mem, &d2, db);
-        }
-        DeleteObject(db);
-    }
 
     BitBlt(dc, 0, 0, g_winW, g_winH, mem, 0, 0, SRCCOPY);
     SelectObject(mem, old);
