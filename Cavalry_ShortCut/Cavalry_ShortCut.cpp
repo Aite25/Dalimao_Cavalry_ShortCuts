@@ -1385,6 +1385,7 @@ static void SetHotkeyEnabled(bool on) {
 static bool IsCavalryWindow(HWND h) {
     DWORD pid = 0;
     GetWindowThreadProcessId(h, &pid);
+    if (pid == GetCurrentProcessId()) return TRUE;   // 排除热盒自己（文件名也含 cavalry）
     if (!pid) return false;
     HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
     if (!hProc) return false;
@@ -1399,6 +1400,56 @@ static bool IsCavalryWindow(HWND h) {
     CloseHandle(hProc);
     return ok;
 }
+static bool g_cavalryAlive = true;
+
+struct CavProbe { bool found; bool visible; };
+
+static BOOL CALLBACK CavProbeProc(HWND h, LPARAM lp) {
+    CavProbe* pr = (CavProbe*)lp;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    if (!pid || pid == GetCurrentProcessId()) return TRUE;
+    HANDLE hp = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!hp) return TRUE;
+    wchar_t buf[MAX_PATH] = {0};
+    DWORD sz = MAX_PATH;
+    BOOL ok = QueryFullProcessImageNameW(hp, 0, buf, &sz);
+    CloseHandle(hp);
+    if (!ok) return TRUE;
+    std::wstring path(buf);
+    for (auto& ch : path) ch = (wchar_t)towlower(ch);
+    if (path.find(L"cavalry") == std::wstring::npos) return TRUE;
+    if (path.find(L"cavalry_shortcut") != std::wstring::npos) return TRUE;
+    pr->found = true;
+    if (IsWindowVisible(h) && !IsIconic(h)) { pr->visible = true; return FALSE; }
+    return TRUE;
+}
+
+// 每 tick 调用：Cavalry 没有"可见且未最小化"的窗口 → 收起热盒
+static HWND g_cavalryWnd = nullptr;   // 呼出热盒时 Cavalry 的前台窗口
+
+static bool AnyCavalryVisible() {
+    CavProbe pr = { false, false };
+    EnumWindows(CavProbeProc, (LPARAM)&pr);
+    return pr.visible;
+}
+
+static void TickCavalryState(HWND hotbox) {
+    if (!g_cavalryWnd || !IsWindow(g_cavalryWnd)) g_cavalryWnd = nullptr;
+    bool alive = g_cavalryWnd ? true : AnyCavalryVisible();
+    bool hideNow = false;
+    if (!alive) hideNow = true;
+    else if (g_cavalryWnd && (IsIconic(g_cavalryWnd) || !IsWindowVisible(g_cavalryWnd))) hideNow = true;
+    if (hideNow && IsWindowVisible(hotbox)) {
+        // 直接关闭：不保留状态，下次呼出重新开始（不退出进程）
+        g_binding = false;
+        g_mode = M_PIE;
+        g_hover = -1;
+        SyncEditFromMode();
+        ShowWindow(hotbox, SW_HIDE);
+    }
+}
+
 
 static LRESULT CALLBACK CatcherProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     if (m == WM_LBUTTONDOWN) {
@@ -1443,6 +1494,7 @@ static void ForceForeground(HWND hwnd) {
 
 static void ShowAtCursor(HWND hwnd) {
     g_mode = M_PIE;
+    { HWND fg0 = GetForegroundWindow(); if (fg0 && IsCavalryWindow(fg0)) g_cavalryWnd = fg0; }
     g_box = 0; g_mod = 0; LoadActive();   // 每次呼出都从"热盒1 · 无"开始
     g_ctrlUsed = true;   // 呼出用的 Ctrl 不算"单独按 Ctrl"，避免一开就切到 Ctrl 版
     g_query.clear();
@@ -1538,6 +1590,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             bool want = IsCavalryWindow(fg) || fg == hwnd || (g_main && fg == g_main) || (g_edit && fg == g_edit);
             if (want != g_hotkeyOn) SetHotkeyEnabled(want);
         }
+        TickCavalryState(hwnd);
         if (IsWindowVisible(hwnd) && g_mode == M_PIE) {
             if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) { ShowWindow(hwnd, SW_HIDE); return 0; }   // 右键取消
             POINT cp; GetCursorPos(&cp);
@@ -2043,6 +2096,16 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 // ---------------------------------------------------------------- 入口
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
+    {   // 单实例：已有实例则退出（避免多份窗口抢热键）
+        HANDLE mtx = CreateMutexW(nullptr, TRUE, L"CavalryShortCut_Single");
+        if (mtx && GetLastError() == ERROR_ALREADY_EXISTS) {
+            if (cmdLine && wcsstr(cmdLine, L"--show")) {
+                HWND ex = FindWindowW(L"CavalryShortCut", L"Cavalry ShortCut");
+                if (ex) PostMessageW(ex, WM_APP + 1, 0, 0);
+            }
+            return 0;
+        }
+    }
     if (cmdLine && wcsstr(cmdLine, L"--show")) {
         HWND existing = FindWindowW(L"CavalryShortCut", L"Cavalry ShortCut");
         if (existing) { PostMessageW(existing, WM_APP + 1, 0, 0); return 0; }
