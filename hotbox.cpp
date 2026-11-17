@@ -91,6 +91,7 @@ static UINT g_hotkeyMods = MOD_ALT | MOD_NOREPEAT;
 static UINT g_hotkeyVk = 'Q';
 static int g_trayTick = 0;
 static bool g_inMenu = false;
+static bool g_imeOn = true;   // 输入框是否启用输入法（hotbox.ini: ime=off 可关）
 static bool g_dragging = false;
 static bool g_selAll = false;
 static void SyncEditText();
@@ -333,6 +334,7 @@ static void CreateEdit(HWND parent, HINSTANCE inst) {
     if (!g_edit) return;
     HFONT f = MakeFont(16);
     SendMessageW(g_edit, WM_SETFONT, (WPARAM)f, TRUE);
+    if (!g_imeOn) ImmAssociateContext(g_edit, nullptr);   // ime=off：字母直通，不打拼音
     SetWindowSubclass(g_edit, EditSubclass, 1, 0);
 
     g_scrollbar = CreateWindowExW(0, L"SCROLLBAR", nullptr,
@@ -1005,6 +1007,10 @@ static void LoadConfig() {
         std::string line = raw.substr(pos, eol == std::string::npos ? std::string::npos : eol - pos);
         pos = (eol == std::string::npos) ? raw.size() : eol + 1;
         while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+        if (line.rfind("ime=", 0) == 0) {
+            g_imeOn = (line.find("off") == std::string::npos);
+            continue;
+        }
         if (line.rfind("hotkey=", 0) == 0) {
             std::wstring spec = Trim(Widen(line.substr(7)));
             UINT mods = 0, vk = 0;
