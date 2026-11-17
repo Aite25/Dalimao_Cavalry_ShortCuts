@@ -1138,13 +1138,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     case WM_ERASEBKGND:
         return 1;
-    case WM_ACTIVATE:
-        if (LOWORD(wp) == WA_INACTIVE && !g_inMenu) {
-            ShowWindow(hwnd, SW_HIDE);
-            g_mode = M_PIE;
-            SyncEditFromMode();
-        }
-        return 0;
     case WM_MBUTTONDOWN: {
         g_dragging = true;
         SetCapture(hwnd);
