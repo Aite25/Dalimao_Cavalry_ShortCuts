@@ -1989,13 +1989,15 @@ static void ShowAtCursor(HWND hwnd) {
     POINT c;
     GetCursorPos(&c);
     const int winW = g_winW + kPadX * 2, winH = g_winH + kPadY * 2;
-    int x = c.x - g_winW / 2 - kPadX, y = c.y - g_winH / 2 - kPadY;
+    // 只把"界面本身"（g_winW × g_winH）挂在光标上；外圈的透明输入区允许超出屏幕
+    int cx0 = c.x - g_winW / 2, cy0 = c.y - g_winH / 2;
     RECT work;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
-    if (x < work.left) x = work.left;
-    if (y < work.top) y = work.top;
-    if (x + winW > work.right) x = work.right - winW;
-    if (y + winH > work.bottom) y = work.bottom - winH;
+    if (cx0 < work.left) cx0 = work.left;
+    if (cy0 < work.top) cy0 = work.top;
+    if (cx0 + g_winW > work.right) cx0 = work.right - g_winW;
+    if (cy0 + g_winH > work.bottom) cy0 = work.bottom - g_winH;
+    int x = cx0 - kPadX, y = cy0 - kPadY;
 
     g_shownTick = GetTickCount();
     g_focusRetry = cavFrontAtShow ? 60 : 0;
