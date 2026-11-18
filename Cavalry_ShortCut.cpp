@@ -2381,7 +2381,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
         }
-        if (g_mode == M_PIE && g_hover >= 0 && g_slots[g_hover].used) { RunItem(g_slots[g_hover]); return 0; }   // 空白处左键 = 确认悬停项
+        if (g_mode == M_PIE && g_hover >= 0 && g_slots[g_hover].used) { Item it2; it2.name = g_slots[g_hover].name; it2.kind = g_slots[g_hover].kind; it2.value = g_slots[g_hover].value; it2.cat = g_slots[g_hover].kind; RunItem(it2); return 0; }   // 空白处左键 = 确认悬停项
         return 0;
     }
     case WM_CTLCOLORSTATIC:
