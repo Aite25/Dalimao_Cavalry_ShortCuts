@@ -1592,6 +1592,7 @@ static std::string DescribeWindow(HWND h) {
     std::string out = Narrow(cls) + "/" + std::to_string(pid);
     return out;
 }
+static int g_focusRetry = 0;   // 显示后短暂抢焦点重试
 static DWORD g_shownTick = 0;
 
 static bool AnyCavalryVisible() {
@@ -1684,6 +1685,7 @@ static void ShowAtCursor(HWND hwnd) {
     if (y + g_winH > work.bottom) y = work.bottom - g_winH;
 
     g_shownTick = GetTickCount();
+    g_focusRetry = 60;   // 约 300ms 内持续确保焦点在热盒
     // 先短暂置顶再取消：确保能盖住当前前台窗口，但之后仍可被其它窗口覆盖
 { HDC dc0 = GetDC(hwnd); RECT rc0 = { 0, 0, g_winW, g_winH }; HBRUSH b0 = CreateSolidBrush(RGB(0,0,0)); FillRect(dc0, &rc0, b0); DeleteObject(b0); ReleaseDC(hwnd, dc0); }
     InvalidateRect(hwnd, nullptr, TRUE);
@@ -1767,6 +1769,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             // 保持常驻注册；是否响应在 WM_HOTKEY 里按前台判断
         }
         TickCavalryState(hwnd);
+        if (g_focusRetry > 0 && IsWindowVisible(hwnd)) {
+            --g_focusRetry;
+            HWND fgNow = GetForegroundWindow();
+            if (fgNow != hwnd && fgNow != g_edit) ForceForeground(hwnd);
+        }
         {   // 触发器：Cavalry 脚本写文件 -> 呼出热盒（替代全局热键）
             static wchar_t trig[MAX_PATH] = {0};
             static FILETIME lastTrig = {0, 0};
