@@ -1,0 +1,169 @@
+# 热盒呼出失败：原因清单与排查手册
+
+> 适用版本：Cavalry 2.8.1（Windows）+ Cavalry_ShortCut
+> 记录时间：2026-11-18
+> 说明：这份文档总结了开发过程中**实际遇到过**的每一条"呼出失败"，按"症状 → 原因 → 修法"排列。
+
+---
+
+## 一、先说结论：当前唯一可用的呼出链路
+
+```
+Cavalry 快捷键（Shortcut Manager 绑定）
+   → 脚本 %APPDATA%\Cavalry\Scripts\Cavalry ShortCut 呼出.js
+   → 写 %TEMP%\CavalryShortCut.show（内容 show + 时间戳）
+   → Cavalry_ShortCut.exe 每 5ms 检查该文件的"修改时间"
+   → ShowAtCursor()：出现在鼠标位置 + HWND_TOP
+```
+
+任何一环断了都会表现为"按了没反应"。下面按环节列原因。
+
+---
+
+## 二、脚本环节（最常见）
+
+### 1. 脚本文件名改过，导致快捷键绑定失效 ⚠️ 踩过
+
+Cavalry 的快捷键绑定记录在 `%LOCALAPPDATA%\Cavalry\shortcuts.json`，**按绝对路径 + 文件名**作为 key：
+
+```json
+"C:\\Users\\...\\Scripts\\Cavalry ShortCut 呼出.js": "Shift+A"
+```
+
+只要把脚本**改名/移动**，这条绑定就指向一个不存在的文件 → 菜单里还能点，快捷键完全无效。
+
+**排查**：打开 `shortcuts.json`，确认 key 的文件名与实际文件**逐字符一致**。
+**修法**：改回原名，或重新在 Shortcut Manager 里绑定。
+
+### 2. 脚本没放进正确目录 / 没重启 Cavalry
+
+- 正确目录：`%APPDATA%\Cavalry\Scripts\`（注意是 **Roaming**，不是 Local）
+- 新增脚本后必须**重启 Cavalry** 才会被扫描进 Shortcut Manager
+
+### 3. `api.runDetachedProcess` 在 2.8.1 不存在
+
+文档里有，运行时报 `TypeError: api.runDetachedProcess is not a function`。
+2.8.1 运行时只有 `api.exec`（执行 Cavalry 脚本），**没有**启动外部程序的 API。
+→ 所以不能用脚本直接拉起 exe，只能"写信号文件让已在运行的 exe 响应"。
+
+### 4. 脚本里的 API 用错
+
+可用且已验证：
+
+```js
+api.getTempFolder()                       // 返回临时目录
+api.writeToFile(path, content, overwrite) // 第三参可选
+```
+
+两者都在 `@JS_GUI_API` 命名空间，Cavalry 2.8.1 实测可用。
+
+---
+
+## 三、信号文件环节
+
+### 5. 依赖"删除文件"来防重复 → 删除失败就无限触发 ⚠️ 踩过
+
+早期实现是"发现文件 → 删除 → 显示"。若 `DeleteFileW` 失败（被占用/权限），文件一直在 → **每 5ms 触发一次**，表现为热盒疯狂闪烁、抢焦点、无法在其它应用打字。
+
+**修法**：改用**文件修改时间**判定（`GetFileAttributesExW` + `CompareFileTime`），同一次写入只响应一次，不依赖删除。
+
+### 6. 路径不一致
+
+exe 用 `_wdupenv_s(L"TEMP")` 拼路径，脚本用 `api.getTempFolder()`。
+两者通常一致，但 8.3 短路径（`HUANGL~1`）与长路径混用时要注意**归一化**。
+**排查**：日志里打 `trigger path=`，和脚本实际写的路径比对。
+
+---
+
+## 四、显示环节（最隐蔽）
+
+### 7. `IsWindowVisible == true` 但窗口被遮挡 ⚠️ 踩过两次
+
+触发器里曾有：
+
+```cpp
+if (!IsWindowVisible(hwnd) || g_mode != M_PIE) ShowAtCursor(hwnd);
+```
+
+窗口被 Chrome / Cavalry 盖住后，`IsWindowVisible` **仍然是 true**，于是不再调用 `ShowAtCursor` → 永远不重新置顶 → 用户以为"呼出失败"。
+
+**修法**：触发时**无条件**调用 `ShowAtCursor(hwnd)`，每次都重新定位 + 置顶。
+
+### 8. 只调用 `SetWindowPos(HWND_TOPMOST)` 不生效 ⚠️ 踩过
+
+后续的 `SetWindowPos(hwnd, HWND_TOP, ...)`（`ForceForeground` 里）会把 topmost 状态冲掉。
+**若要真正置顶**：创建窗口时就要带 `WS_EX_TOPMOST`。
+
+**注意**：当前版本**故意不用 TOPMOST**——要求"其它应用窗口能盖住热盒"。
+
+### 9. `SWP_NOACTIVATE` 导致键盘事件收不到
+
+热盒以 `SWP_NOACTIVATE` 显示时**不获取键盘焦点**，`WM_KEYDOWN` 收不到空格/反引号，空格会落到 Cavalry 触发"播放"。
+**修法**：热盒显示期间临时 `RegisterHotKey(VK_SPACE)`，隐藏时注销；被遮挡时也注销（`WindowFromPoint` 判断）。
+
+### 10. 瞬时 `GetForegroundWindow() == null` 误杀
+
+曾用"前台不是 Cavalry 就收起"的规则，切换窗口瞬间前台为 `null`，窗口刚显示就被自己收起。
+**修法**：忽略 `null`；且已**整体取消自动关闭**（改为手动关闭），此坑不再存在。
+
+---
+
+## 五、执行环节（点击扇区没反应）
+
+### 11. 桥要求先 `read_preamble`
+
+直接 `POST /call {"name":"execute_script",...}` 会返回：
+
+```
+ERROR: Read the preamble (read_preamble) before calling execute_script.
+```
+
+而热盒日志只判断 `"isError":false` 就打印 `ok`，属于**假成功**——看起来执行了，实际什么都没发生。
+**修法**：执行前先发一次 `read_preamble`；若返回里出现该错误则重发并重试一次。
+
+### 12. 桥/端口没起来
+
+- Cavalry 侧：`Preferences → Enable MCP Server`（默认 6768）
+- 桥：`cavalry_bridge.mjs` 监听 `127.0.0.1:6769`
+- 日志第一行 `bridge ok` / `bridge not connected` 可直接判断
+**排查**：`Get-NetTCPConnection -State Listen | ? LocalPort -in 6768,6769`
+
+---
+
+## 六、进程环境
+
+### 13. 多实例互相抢
+
+反复 `start` 会留下多个 `Cavalry_ShortCut.exe`，各自有窗口、抢热键，表现为"有时能呼出有时不能"。
+**修法**：`CreateMutexW(L"CavalryShortCut_Single")` 单实例；`--show` 时向已有实例 `PostMessage(WM_APP+1)`。
+
+### 14. 运行的是旧 exe
+
+改了代码/配置但没重启进程，所有现象都对不上。
+**判据**：看日志文件是否更新；对比 exe 的 `LastWriteTime` 与进程 `StartTime`。
+
+---
+
+## 七、30 秒排查清单（按顺序）
+
+1. `Get-Process Cavalry_ShortCut` —— 进程在不在？（不在就启动）
+2. 日志最后几行：
+   - `bridge ok` / `not connected`
+   - `hotkey off -> ok`
+3. `%TEMP%\CavalryShortCut.show` 的**修改时间**是否在你按下快捷键时更新？
+   - 不更新 → 脚本没跑（见 §二：文件名/目录/重启）
+   - 更新 → 看日志有没有 `trigger hit` + `after show`
+4. 有 `trigger hit` 但无 `after show` → 触发器代码没走 `ShowAtCursor`（§四.7）
+5. 有 `after show: vis=1` 但屏幕看不到 → 窗口被遮挡（§四.8）或位置在屏幕外
+6. 能显示但点扇区无效 → 看日志是否 `Read the preamble`（§五.11）
+7. 全都不对 → 换一个**全新的** exe 重启，并用 `--show` 直接启动验证一次
+
+---
+
+## 八、一句话经验
+
+> **`IsWindowVisible` 不等于"用户看得见"。**
+> 判断"窗口是否真的显示在最前"要用 `WindowFromPoint` / z 序检查，而不是可见性 API。
+>
+> **任何"按需注册 / 自动关闭"的实时监测，都会引入时序类 bug。**
+> 能用手动关闭 + 简单触发链解决的，不要加监测。
