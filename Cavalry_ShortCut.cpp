@@ -2188,8 +2188,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                         }
                     }
                 }
+                return 0;   // 命中文件夹后不再落到扇区判定
             }
-                return 0;   // 打开文件夹后不再落到扇区判定
         }
 
         // 搜索页签
