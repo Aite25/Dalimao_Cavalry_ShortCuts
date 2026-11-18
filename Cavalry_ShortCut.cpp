@@ -449,6 +449,7 @@ static void RunScriptText(const std::string& script) {
 
 static std::wstring Trim(const std::wstring& s);
 static bool IsCavalryWindow(HWND h);
+static std::string DescribeWindow(HWND h);
 static HWND g_cavalryWnd = nullptr;
 // ---------------------------------------------------------------- 操作（快捷键）
 static UINT VkFromToken(const std::wstring& t) {
@@ -525,9 +526,21 @@ static void RunItem(const Item& it) {
         RunScriptText("(function(){var id=api.create(\"" + Narrow(it.value) + "\"); if(id) api.select([id]);})();");
     } else if (it.kind == L"keys") {
         {
+            ShowWindow(g_main, SW_HIDE);
+            Sleep(60);
             HWND cav = g_cavalryWnd;
             if (!cav || !IsWindow(cav)) { HWND fg = GetForegroundWindow(); if (IsCavalryWindow(fg)) cav = fg; }
-            if (cav && IsWindow(cav)) { SetForegroundWindow(cav); Sleep(90); }
+            if (cav && IsWindow(cav)) {
+                HWND fgNow = GetForegroundWindow();
+                DWORD fgTid = fgNow ? GetWindowThreadProcessId(fgNow, nullptr) : 0;
+                DWORD cavTid = GetWindowThreadProcessId(cav, nullptr);
+                if (fgTid && cavTid && fgTid != cavTid) AttachThreadInput(fgTid, cavTid, TRUE);
+                BringWindowToTop(cav);
+                SetForegroundWindow(cav);
+                if (fgTid && cavTid && fgTid != cavTid) AttachThreadInput(fgTid, cavTid, FALSE);
+                Sleep(150);
+            }
+            Log(std::string("op send, fg=") + DescribeWindow(GetForegroundWindow()));
             SendCombo(it.value);
         }
     }
