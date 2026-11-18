@@ -1,4 +1,4 @@
-// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
+﻿// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
 //
 // 参考 AE 插件 DalimaoShortcuts 的热盒：
 //   · 径向 8 扇区（N/NE/E/SE/S/SW/W/NW）+ 中心圆
@@ -2455,6 +2455,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_mode == M_SEARCH || g_mode == M_SETTINGS) SyncEditFromMode();   // 拖动结束恢复输入框
         g_dragging = false;
         ReleaseCapture();
+        return 0;
+    case WM_SHOWWINDOW:
+        if (!wp) {   // 主窗口一隐藏，原生输入框小窗必须同步隐藏，否则会留在屏幕上
+            if (g_editHost) ShowWindow(g_editHost, SW_HIDE);
+            if (g_scrollbar) ShowWindow(g_scrollbar, SW_HIDE);
+        }
         return 0;
     case WM_ACTIVATE:
         return 0;   // 切窗口不再关闭面板，方便观察状态
