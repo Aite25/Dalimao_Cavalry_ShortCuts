@@ -2325,7 +2325,7 @@ static void ExecSelected() {
         g_slots[g_bindSlot].name = it.name;
         g_slots[g_bindSlot].kind = it.kind;
         g_slots[g_bindSlot].value = it.value;
-        if (g_slots[g_bindSlot].key.empty()) g_slots[g_bindSlot].key = std::to_wstring(g_bindSlot + 1);
+        if (g_slots[g_bindSlot].key.empty()) g_slots[g_bindSlot].key = kDefaultKeys[g_bindSlot];
         g_slots[g_bindSlot].used = true;
         SaveSectors();
         Log("bind slot " + std::to_string(g_bindSlot) + " -> " + Narrow(it.name));
@@ -2756,7 +2756,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                         g_slots[g_sel].name = it.name;
                         g_slots[g_sel].kind = it.kind;
                         g_slots[g_sel].value = it.value;
-                        g_slots[g_sel].key = std::to_wstring(g_sel + 1);
+                        if (g_slots[g_sel].key.empty()) g_slots[g_sel].key = kDefaultKeys[g_sel];   // 绑定不改已有快捷键
                         g_slots[g_sel].used = true;
                         SaveSectors();
                         Log("bind sector " + std::to_string(g_sel) + " -> " + Narrow(it.name));
