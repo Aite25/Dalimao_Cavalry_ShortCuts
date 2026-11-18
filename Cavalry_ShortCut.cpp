@@ -981,7 +981,7 @@ static RECT RowRect(int i) {
     r.left = p.left + 16;
     r.right = p.right - 34;
     r.top = p.top + 112 + i * 30;
-    r.bottom = r.top + 18;
+    r.bottom = r.top + 18;   // 27..45 → 中心 36
     return r;
 }
 
@@ -1001,8 +1001,8 @@ static RECT IconRect(int i) {   // 只保留设置（齿轮），忽略参数
     RECT r;
     r.right = p.right - 2;
     r.left = r.right - 18;
-    r.top = p.top + 33;
-    r.bottom = r.top + 18;
+    r.top = p.top + 27;   // 与 Ctrl 行（24..48）居中对齐
+    r.bottom = r.top + 18;   // 27..45 → 中心 36
     return r;
 }
 
@@ -1306,7 +1306,7 @@ static RECT SettingRowRect(int i) {
     r.left = p.left + 232;
     r.right = p.right - 16;
     r.top = p.top + 112 + i * 30;
-    r.bottom = r.top + 18;
+    r.bottom = r.top + 18;   // 27..45 → 中心 36
     return r;
 }
 
@@ -1466,22 +1466,33 @@ static void DrawTabs(HDC dc) {
     }
 }
 static void DrawTopIcons(HDC dc) {
-    // 右上角：设置齿轮（小号，与页签行垂直居中，右对齐面板右缘）
+    // 右上角：设置齿轮（与 Ctrl 页签行垂直居中，右缘齐面板右边）
     RECT gr = IconRect(0);
+    {   // 底板（恢复）
+        RECT pill = { gr.left - 5, gr.top - 4, gr.right + 5, gr.bottom + 4 };
+        FillRound(dc, pill, 6, RGB(40, 40, 43), RGB(56, 56, 60));
+    }
     int cx = (gr.left + gr.right) / 2, cy = (gr.top + gr.bottom) / 2;
-    int r1 = 5, r2 = 2;
-    HPEN pen = CreatePen(PS_SOLID, 1, RGB(150, 150, 156));
-    HGDIOBJ op = SelectObject(dc, pen);
-    HGDIOBJ ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-    Ellipse(dc, cx - r1, cy - r1, cx + r1, cy + r1);
-    Ellipse(dc, cx - r2, cy - r2, cx + r2, cy + r2);
-    SetPixel(dc, cx, cy - r1 - 1, RGB(150, 150, 156));
-    SetPixel(dc, cx, cy + r1 + 1, RGB(150, 150, 156));
-    SetPixel(dc, cx - r1 - 1, cy, RGB(150, 150, 156));
-    SetPixel(dc, cx + r1 + 1, cy, RGB(150, 150, 156));
+    HBRUSH body = CreateSolidBrush(RGB(165, 165, 172));
+    HGDIOBJ ob = SelectObject(dc, body);
+    HGDIOBJ op = SelectObject(dc, GetStockObject(NULL_PEN));
+    // 8 个齿
+    const int tx[8] = { 0, 6, 8, 6, 0, -6, -8, -6 };
+    const int ty[8] = { -8, -6, 0, 6, 8, 6, 0, -6 };
+    for (int k = 0; k < 8; ++k) {
+        RECT t = { cx + tx[k] - 2, cy + ty[k] - 2, cx + tx[k] + 2, cy + ty[k] + 2 };
+        FillRect(dc, &t, body);
+    }
+    Ellipse(dc, cx - 6, cy - 6, cx + 6, cy + 6);   // 轮体
     SelectObject(dc, ob);
+    DeleteObject(body);
+    // 中心孔（用底板色挖空）
+    HBRUSH hole = CreateSolidBrush(RGB(40, 40, 43));
+    HGDIOBJ ob2 = SelectObject(dc, hole);
+    Ellipse(dc, cx - 2, cy - 2, cx + 3, cy + 3);
+    SelectObject(dc, ob2);
+    DeleteObject(hole);
     SelectObject(dc, op);
-    DeleteObject(pen);
 }
 
 static const int kPadX = 320;   // 输入区左右扩展（透明）
