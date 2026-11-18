@@ -2381,7 +2381,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
         }
-        if ((g_mode == M_SEARCH || g_mode == M_SETTINGS) && IsWindowVisible(hwnd) && g_edit && !g_inMenu) {
+        if ((g_mode == M_SEARCH || g_mode == M_SETTINGS) && IsWindowVisible(hwnd) && g_edit && !g_inMenu && !g_captureHotkey) {
             if (GetFocus() != g_edit) SetFocus(g_edit);
         }
         return 0;
@@ -2702,7 +2702,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             {   // 呼出快捷键行
                 RECT hk = SetHotkeyRect();
-                if (p.x >= hk.left && p.x < hk.right && p.y >= hk.top && p.y < hk.bottom) { g_captureHotkey = true; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+                if (p.x >= hk.left && p.x < hk.right && p.y >= hk.top && p.y < hk.bottom) {
+                    g_captureHotkey = true;
+                    SetFocus(hwnd);   // 焦点交给主窗口，否则按键会打进输入框
+                    InvalidateRect(hwnd, nullptr, TRUE);
+                    return 0;
+                }
             }
             for (int i = 0; i < 8; ++i) {   // 左侧环状热盒：点击选中
                 RECT rr0 = SetRingRect(i);
@@ -2821,6 +2826,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 g_captureHotkey = false;
                 SaveSectors();
                 Log("captured sector key " + Narrow(spec));
+                SyncEditFromMode();   // 恢复输入框焦点
                 InvalidateRect(hwnd, nullptr, TRUE);
             }
             return 0;
