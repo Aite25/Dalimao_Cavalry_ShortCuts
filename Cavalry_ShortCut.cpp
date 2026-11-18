@@ -99,6 +99,7 @@ struct Item {
 static Item g_bindItem;            // 待绑定的搜索项
 static std::vector<std::wstring> g_pinned;   // 置顶项 key = kind + "|" + value
 static std::vector<std::wstring> g_opsJs;   // 操作项的 JS（按 index 引用，避免存进 json 被截断）
+static std::vector<std::wstring> g_opsNames;
 static std::vector<Item> g_index;      // 搜索结果来源
 
 enum Mode { M_PIE, M_SEARCH, M_SETTINGS };
@@ -553,6 +554,7 @@ static void LoadOps() {
     for (auto& o : ops) {
         Item it;
         it.name = o.name;
+        g_opsNames.push_back(it.name);
         it.kind = L"ops";
         it.value = L"op:" + std::to_wstring(g_opsJs.size());
         g_opsJs.push_back(o.js);
@@ -778,6 +780,11 @@ static void LoadSectors() {
         s.key = JsonGetStr(segs[i], "key");
         s.used = !s.value.empty();
         if (s.kind.empty()) s.kind = L"script";
+        if (s.kind == L"ops") {
+            for (size_t k = 0; k < g_opsNames.size(); ++k) {
+                if (g_opsNames[k] == s.name) { s.value = L"op:" + std::to_wstring(k); break; }
+            }
+        }
         g_store[i / 8][i % 8] = s;
     }
     if (total == 8) {   // 旧格式：复制到其余 15 组
