@@ -490,10 +490,23 @@ static void SendCombo(const std::wstring& spec) {
         start = plus + 1;
     }
     if (keys.empty()) return;
-    std::vector<INPUT> ins;
-    for (auto vk : keys) { INPUT i = {}; i.type = INPUT_KEYBOARD; i.ki.wVk = (WORD)vk; ins.push_back(i); }
-    for (auto it = keys.rbegin(); it != keys.rend(); ++it) { INPUT i = {}; i.type = INPUT_KEYBOARD; i.ki.wVk = (WORD)*it; i.ki.dwFlags = KEYEVENTF_KEYUP; ins.push_back(i); }
-    SendInput((UINT)ins.size(), ins.data(), sizeof(INPUT));
+
+    // 逐个按下（带间隔，避免被合并/丢弃）
+    for (auto vk : keys) {
+        INPUT i = {}; i.type = INPUT_KEYBOARD; i.ki.wVk = (WORD)vk;
+        i.ki.wScan = (WORD)MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
+        SendInput(1, &i, sizeof(INPUT));
+        Sleep(30);
+    }
+    Sleep(40);
+    // 逆序松开
+    for (auto it = keys.rbegin(); it != keys.rend(); ++it) {
+        INPUT i = {}; i.type = INPUT_KEYBOARD; i.ki.wVk = (WORD)*it;
+        i.ki.dwFlags = KEYEVENTF_KEYUP;
+        i.ki.wScan = (WORD)MapVirtualKeyW(*it, MAPVK_VK_TO_VSC);
+        SendInput(1, &i, sizeof(INPUT));
+        Sleep(30);
+    }
     Log("sent combo " + Narrow(spec));
 }
 
