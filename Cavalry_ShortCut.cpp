@@ -1092,8 +1092,7 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
     HFONT ft = MakeFont(13);
     HGDIOBJ of = SelectObject(dc, ft);
     SetTextColor(dc, RGB(140, 140, 140));
-    DrawPieTabs(dc);
-    RECT tr = { p.left + 16, p.top + 88, p.right - 16, p.top + 108 };
+    RECT tr = { p.left + 16, p.top + 10, p.right - 16, p.top + 30 };
     DrawTextW(dc, title.c_str(), -1, &tr, DT_LEFT | DT_SINGLELINE);
     SelectObject(dc, of);
     DeleteObject(ft);
@@ -1305,8 +1304,6 @@ static void DrawSettings(HDC dc) {
     HGDIOBJ of = SelectObject(dc, ft);
     SetTextColor(dc, RGB(140, 140, 140));
     DrawPieTabs(dc);
-    RECT tr = { p.left + 16, p.top + 88, p.right - 16, p.top + 108 };
-    DrawTextW(dc, L"设置 —— 点一行修改绑定（Delete 清除，Esc 返回）", -1, &tr, DT_LEFT | DT_SINGLELINE);
     SelectObject(dc, of);
     DeleteObject(ft);
 
@@ -1367,6 +1364,17 @@ static void DrawSettings(HDC dc) {
         DrawTextW(dc, label.c_str(), -1, &tr2, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
         SelectObject(dc, of2);
         DeleteObject(f);
+    }
+    {   // 底部操作提示
+        RECT p2 = PanelRect();
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, RGB(120, 124, 132));
+        HFONT f3 = MakeFont(12);
+        HGDIOBJ o3 = SelectObject(dc, f3);
+        RECT hr = { p2.left + 16, p2.bottom - 52, p2.right - 200, p2.bottom - 30 };
+        DrawTextW(dc, L"↑↓ 选择 · Enter 修改绑定 · Delete 清除 · Esc 关闭", -1, &hr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(dc, o3);
+        DeleteObject(f3);
     }
     {   // 底部按钮：取消 / 确定
         RECT p = PanelRect();
@@ -1715,6 +1723,7 @@ static std::string DescribeWindow(HWND h) {
 }
 static int g_focusRetry = 0;   // 显示后短暂抢焦点重试
 static DWORD g_shownTick = 0;
+static bool g_forceShow = false;   // 仅调试用：--show-force 时即使 Cavalry 没开也显示
 
 static bool AnyCavalryVisible() {
     CavProbe pr = { false, false };
@@ -1795,7 +1804,7 @@ static void HideHotbox(HWND hwnd) {
 }
 
 static void ShowAtCursor(HWND hwnd) {
-    if (!AnyCavalryVisible()) { Log("show skipped: cavalry not running"); return; }   // Cavalry 没开就不显示
+    if (!g_forceShow && !AnyCavalryVisible()) { Log("show skipped: cavalry not running"); return; }
     bool cavFrontAtShow = IsCavalryWindow(GetForegroundWindow());   // 只有从 Cavalry 触发才抢焦点
     if (IsWindowVisible(hwnd)) ShowWindow(hwnd, SW_HIDE);   // 先藏起来，避免旧画面（搜索面板）闪一下
     g_mode = M_PIE;
@@ -2509,6 +2518,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 // ---------------------------------------------------------------- 入口
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     bool showOnStart = (cmdLine && wcsstr(cmdLine, L"--show") != 0);
+    if (cmdLine && wcsstr(cmdLine, L"--show-force")) g_forceShow = true;
     {   // 单实例：已有实例则退出（避免多份窗口抢热键）
         HANDLE mtx = CreateMutexW(nullptr, TRUE, L"CavalryShortCut_Single");
         if (mtx && GetLastError() == ERROR_ALREADY_EXISTS) {
