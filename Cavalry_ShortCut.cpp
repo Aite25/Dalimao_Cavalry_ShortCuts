@@ -1656,7 +1656,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (trigHit) {
                 { HWND fgx = GetForegroundWindow(); Log(std::string("trigger hit, fg=") + DescribeWindow(fgx) + " cavFront=" + ((IsCavalryWindow(fgx) || IsWindowVisible(hwnd)) ? "1" : "0")); }
                 lastTrig = fad.ftLastWriteTime;
-                            if (!IsWindowVisible(hwnd) || g_mode != M_PIE) { ShowAtCursor(hwnd); Log(std::string("after show: vis=") + (IsWindowVisible(hwnd) ? "1" : "0") + " fg=" + DescribeWindow(GetForegroundWindow())); }
+                ShowAtCursor(hwnd);
+                Log(std::string("after show: vis=") + (IsWindowVisible(hwnd) ? "1" : "0") + " fg=" + DescribeWindow(GetForegroundWindow()));
                 InvalidateRect(hwnd, nullptr, TRUE);
             }
         }
