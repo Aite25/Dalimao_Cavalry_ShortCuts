@@ -2642,7 +2642,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         // 图标点击：两个独立命中框（左=文件夹，右=设置）
         // 图标点击：仅设置（右上角齿轮）
-        {
+        if (g_mode != M_SETTINGS) {   // 设置页里这个位置是关闭按钮，不能再当齿轮
             RECT gear = IconRect(0);
             InflateRect(&gear, 8, 10);
             if (p.x >= gear.left && p.x < gear.right && p.y >= gear.top && p.y < gear.bottom) {
