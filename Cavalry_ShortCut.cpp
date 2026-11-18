@@ -460,6 +460,7 @@ static void RunScriptText(const std::string& script) {
 static std::wstring Trim(const std::wstring& s);
 static bool IsCavalryWindow(HWND h);
 static void HideHotbox(HWND hwnd);
+static bool AnyCavalryVisible();
 static std::string DescribeWindow(HWND h);
 static HWND g_cavalryWnd = nullptr;
 // ---------------------------------------------------------------- 操作（快捷键）
@@ -1794,6 +1795,7 @@ static void HideHotbox(HWND hwnd) {
 }
 
 static void ShowAtCursor(HWND hwnd) {
+    if (!AnyCavalryVisible()) { Log("show skipped: cavalry not running"); return; }   // Cavalry 没开就不显示
     bool cavFrontAtShow = IsCavalryWindow(GetForegroundWindow());   // 只有从 Cavalry 触发才抢焦点
     if (IsWindowVisible(hwnd)) ShowWindow(hwnd, SW_HIDE);   // 先藏起来，避免旧画面（搜索面板）闪一下
     g_mode = M_PIE;
