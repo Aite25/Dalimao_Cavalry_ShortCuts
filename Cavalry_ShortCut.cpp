@@ -1735,8 +1735,8 @@ static DWORD g_shownTick = 0;
 static bool g_forceShow = false;   // 仅调试用：--show-force 时即使 Cavalry 没开也显示
 static DWORD g_lastWarm = 0;
 
-static void WarmBridgeAsync() {
-    if (GetTickCount() - g_lastWarm < 20000) return;   // 20s 内不重复
+static void WarmBridgeAsync(bool force = false) {
+    if (!force && GetTickCount() - g_lastWarm < 20000) return;   // 20s 内不重复
     g_lastWarm = GetTickCount();
     std::thread([]() {
         EnsurePreamble();
@@ -1752,6 +1752,12 @@ static bool AnyCavalryVisible() {
 }
 
 static void TickCavalryState(HWND hotbox) {
+    {   // Cavalry 刚启动时自动预热一次（覆盖"先开热盒、后开 Cavalry"）
+        static bool prevCav = false;
+        bool cavNow = AnyCavalryVisible();
+        if (cavNow && !prevCav) WarmBridgeAsync(true);
+        prevCav = cavNow;
+    }
     // 只做一件事：热盒被别的窗口挡住时，把空格热键归还；露出来时再收回
     if (!g_msgWndGlobal) return;
     static bool spaceOn = false;
