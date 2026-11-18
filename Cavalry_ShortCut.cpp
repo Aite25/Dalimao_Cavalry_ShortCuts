@@ -544,34 +544,55 @@ static void SendCombo(const std::wstring& spec) {
 }
 
 static void LoadOps() {
-    // 操作 = 调用 Cavalry 脚本目录里的 .js 文件（逻辑写在脚本里，接口变化时只需改脚本）
-    struct Op { const wchar_t* name; const wchar_t* hint; const wchar_t* file; };
-    static const Op ops[] = {
-        { L"设入点（设为当前帧）",     L"[",      L"op_set_in.js" },
-        { L"设出点（设为当前帧）",     L"]",      L"op_set_out.js" },
-        { L"入点=当前帧（裁剪头部）",  L"Alt+[",  L"op_trim_in.js" },
-        { L"出点=当前帧（裁剪尾部）",  L"Alt+]",  L"op_trim_out.js" },
-        { L"上一帧",                  L"Left",   L"op_prev_frame.js" },
-        { L"下一帧",                  L"Right",  L"op_next_frame.js" },
-        { L"跳到起点",                L"Home",   L"op_goto_start.js" },
-        { L"跳到当前图层出点",        L"End",    L"op_goto_layer_out.js" },
-        { L"整体移动：入点对齐播放头（Move In）",  L"",  L"op_move_in.js" },
-        { L"整体移动：出点对齐播放头（Move Out）", L"",  L"op_move_out.js" },
-    };
-    for (auto& o : ops) {
+    // 扫描 exe 目录下的 ops\*.js；脚本头部用注释声明显示名与快捷键：
+    //   // name: 整体移动：入点对齐播放头
+    //   // key:  Alt+[
+    // 新增脚本 = 放进 ops\ 后，下次呼出热盒立即出现
+    g_opsNames.clear(); g_opsHints.clear(); g_opsFiles.clear(); g_opsJs.clear();
+    std::wstring dir = ExeDir() + L"\\ops";
+    WIN32_FIND_DATAW fd = {};
+    HANDLE h = FindFirstFileW((dir + L"\\*.js").c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    std::vector<std::wstring> files;
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+        files.push_back(fd.cFileName);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    std::sort(files.begin(), files.end());
+
+    for (auto& fname : files) {
+        std::string raw = ReadFileUtf8(dir + L"\\" + fname);
+        std::wstring name = fname.substr(0, fname.find_last_of(L'.'));
+        std::wstring key;
+        {
+            size_t p = 0;
+            int cnt = 0;
+            while (p < raw.size() && cnt < 6) {
+                size_t e = raw.find((char)10, p);
+                if (e == std::string::npos) e = raw.size();
+                std::string ln = raw.substr(p, e - p);
+                p = e + 1; ++cnt;
+                std::wstring w = Trim(Widen(ln));
+                if (w.rfind(L"//", 0) != 0) continue;
+                std::wstring body = Trim(w.substr(2));
+                if (body.rfind(L"name:", 0) == 0) name = Trim(body.substr(5));
+                else if (body.rfind(L"key:", 0) == 0) key = Trim(body.substr(4));
+            }
+        }
         Item it;
-        it.name = o.name;
+        it.name = name;
         it.kind = L"ops";
-        it.value = L"op:" + std::to_wstring(g_opsNames.size());
-        it.key = o.hint;
+        it.value = L"op:" + std::to_wstring(g_opsFiles.size());
+        it.key = key;
         it.cat = L"操作";
         g_index.push_back(it);
-        g_opsNames.push_back(it.name);
-        g_opsHints.push_back(o.hint);
-        g_opsFiles.push_back(o.file);
-        g_opsJs.push_back(o.file);   // 兼容：旧字段存文件名
+        g_opsNames.push_back(name);
+        g_opsHints.push_back(key);
+        g_opsFiles.push_back(fname);
     }
 }
+
 
 static void RunItem(const Item& it) {
     HideHotbox(g_main ? g_main : GetActiveWindow());   // 先收起，立刻给反馈
@@ -600,13 +621,7 @@ static void RunItem(const Item& it) {
                 SendCombo(g_opsHints[idx]);
             } else if (idx != (size_t)-1) {
                 if (idx < g_opsFiles.size()) {
-                    std::wstring dir1 = ExeDir() + L"\\Cavalry" ;
-                    wchar_t appdata[MAX_PATH] = {0};
-                    std::wstring p1, p2;
-                    if (GetEnvironmentVariableW(L"APPDATA", appdata, MAX_PATH)) p1 = std::wstring(appdata) + L"\\Cavalry\\Scripts\\" + g_opsFiles[idx];
-                    p2 = ExeDir() + L"\\scripts\\" + g_opsFiles[idx];
-                    std::string code = ReadFileUtf8(p1);
-                    if (code.empty()) code = ReadFileUtf8(p2);
+                    std::string code = ReadFileUtf8(ExeDir() + L"\\ops\\" + g_opsFiles[idx]);
                     if (code.empty()) Log("op script missing: " + Narrow(g_opsFiles[idx]));
                     else RunScriptText(code);
                 }
@@ -1857,6 +1872,12 @@ static void HideHotbox(HWND hwnd) {
 }
 
 static void ShowAtCursor(HWND hwnd) {
+    {   // 热更新：每次呼出重新扫描 actions\ 与 ops\，新脚本立刻可用
+        g_index.clear();
+        LoadIndex();
+        LoadOps();
+        Log("reload: " + std::to_string(g_index.size()) + " items, ops=" + std::to_string(g_opsFiles.size()));
+    }
     if (!g_warmedOnce) {   // 第一次呼出：后台发一次真实 API 调用，把 Cavalry 的 JS 上下文热起来
         g_warmedOnce = true;
         std::thread([]() { EnsurePreamble(); std::string o; DWORD st = 0;
@@ -2616,6 +2637,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     LoadConfig();
     LoadIndex();
     LoadOps();
+        Log("reload: " + std::to_string(g_index.size()) + " items, ops=" + std::to_string(g_opsFiles.size()));
     {
         std::string raw = ReadFileUtf8(ExeDir() + L"\\Cavalry_ShortCut_pinned.txt");
         size_t st = 0;
