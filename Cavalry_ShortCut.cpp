@@ -2233,8 +2233,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         cp.x -= kPadX; cp.y -= kPadY;
         RECT pc = PanelRect();
         int ed = 0;
-        if (g_mode != M_PIE && cp.x >= pc.right - 14 && cp.y >= pc.top + 48) ed |= 1;
-        if (g_mode != M_PIE && cp.y >= pc.bottom - 14) ed |= 2;
+        if (g_mode != M_PIE && cp.x >= pc.right - 14 && cp.x <= pc.right && cp.y >= pc.top + 48 && cp.y <= pc.bottom) ed |= 1;
+        if (g_mode != M_PIE && cp.y >= pc.bottom - 14 && cp.y <= pc.bottom && cp.x >= pc.left && cp.x <= pc.right) ed |= 2;
         if (ed) { SetCursor(LoadCursor(nullptr, (ed == 3) ? IDC_SIZENWSE : (ed == 1 ? IDC_SIZEWE : IDC_SIZENS))); return TRUE; }
         break;
     }
@@ -2336,8 +2336,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         {
             int ex = (int)GET_X_LPARAM(lp), ey = (int)GET_Y_LPARAM(lp);
             int edges = 0;
-            if (g_mode != M_PIE && ex >= PanelRect().right - 14 && ey >= PanelRect().top + 48) edges |= 1;
-            if (g_mode != M_PIE && ey >= PanelRect().bottom - 14) edges |= 2;
+            RECT prr0 = PanelRect();
+            if (g_mode != M_PIE && ex >= prr0.right - 14 && ex <= prr0.right && ey >= prr0.top + 48 && ey <= prr0.bottom) edges |= 1;
+            if (g_mode != M_PIE && ey >= prr0.bottom - 14 && ey <= prr0.bottom && ex >= prr0.left && ex <= prr0.right) edges |= 2;
             if (edges) {
                 g_resizing = true;
                 g_resizeEdges = edges;
