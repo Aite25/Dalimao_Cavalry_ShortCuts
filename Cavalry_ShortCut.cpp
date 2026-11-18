@@ -1777,6 +1777,7 @@ static std::string DescribeWindow(HWND h) {
 static int g_focusRetry = 0;   // 显示后短暂抢焦点重试
 static DWORD g_shownTick = 0;
 static bool g_forceShow = false;   // 仅调试用：--show-force 时即使 Cavalry 没开也显示
+static bool g_spaceReg = false;   // 空格热键是否已注册
 static bool g_warmedOnce = false;   // 只在第一次呼出时预热一次
 
 
@@ -1787,6 +1788,8 @@ static bool AnyCavalryVisible() {
 }
 
 static void TickCavalryState(HWND hotbox) {
+    // 先确保搜索/设置模式一定没有注册空格热键
+    if (g_mode != M_PIE) { if (g_spaceReg) { UnregisterHotKey(g_msgWndGlobal, 2); g_spaceReg = false; } }
     {   // Cavalry 启动时预载一次：让第一次操作也快（不显示任何窗口）
         static bool prevCav = false;
         bool cavNow = AnyCavalryVisible();
@@ -1802,7 +1805,6 @@ static void TickCavalryState(HWND hotbox) {
     }
     // 只做一件事：热盒被别的窗口挡住时，把空格热键归还；露出来时再收回
     if (!g_msgWndGlobal) return;
-    static bool spaceOn = false;
     bool visible = IsWindowVisible(hotbox) != 0;
     bool covered = true;
     if (visible) {
@@ -1812,8 +1814,8 @@ static void TickCavalryState(HWND hotbox) {
         covered = !(under && (under == hotbox || GetAncestor(under, GA_ROOT) == hotbox));
     }
     bool want = visible && !covered && (GetForegroundWindow() == hotbox) && (g_mode == M_PIE);   // 仅圆盘模式
-    if (want && !spaceOn) { RegisterHotKey(g_msgWndGlobal, 2, MOD_NOREPEAT, VK_SPACE); spaceOn = true; }
-    else if (!want && spaceOn) { UnregisterHotKey(g_msgWndGlobal, 2); spaceOn = false; }
+    if (want && !g_spaceReg) { RegisterHotKey(g_msgWndGlobal, 2, MOD_NOREPEAT, VK_SPACE); g_spaceReg = true; }
+    else if (!want && g_spaceReg) { UnregisterHotKey(g_msgWndGlobal, 2); g_spaceReg = false; }
 }
 
 
