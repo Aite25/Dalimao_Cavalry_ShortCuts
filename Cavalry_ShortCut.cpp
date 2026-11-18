@@ -802,7 +802,7 @@ static RECT RowRect(int i) {
     r.left = p.left + 16;
     r.right = p.right - 34;
     r.top = p.top + 112 + i * 26;
-    r.bottom = r.top + 20;
+    r.bottom = r.top + 26;
     return r;
 }
 
@@ -823,7 +823,7 @@ static RECT IconRect(int i) {   // 0=文件夹 1=齿轮
     r.right = p.right - 12 - i * 26;
     r.left = r.right - 20;
     r.top = p.top + 10;
-    r.bottom = r.top + 20;
+    r.bottom = r.top + 26;
     return r;
 }
 
@@ -1087,7 +1087,7 @@ static RECT SettingRowRect(int i) {
     r.left = p.left + 232;
     r.right = p.right - 16;
     r.top = p.top + 112 + i * 26;
-    r.bottom = r.top + 20;
+    r.bottom = r.top + 26;
     return r;
 }
 
