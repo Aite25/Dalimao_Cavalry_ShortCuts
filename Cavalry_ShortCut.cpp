@@ -88,6 +88,7 @@ struct Item {
     std::wstring kind;
     std::wstring value;
     std::wstring cat;      // 脚本 / 形状 / 行为 / 工具 / 效果
+    std::wstring key;      // 展示用提示（如快捷键）
 };
 static Item g_bindItem;            // 待绑定的搜索项
 static std::vector<std::wstring> g_pinned;   // 置顶项 key = kind + "|" + value
@@ -521,22 +522,32 @@ static void SendCombo(const std::wstring& spec) {
 }
 
 static void LoadOps() {
-    struct Op { const wchar_t* name; const wchar_t* keys; };
+    // 每个操作都是一段通过 MCP 在 Cavalry 里执行的脚本，不依赖键盘模拟
+    struct Op { const wchar_t* name; const wchar_t* hint; const wchar_t* js; };
     static const Op ops[] = {
-        { L"设入点 (Set In)",        L"[" },
-        { L"设出点 (Set Out)",       L"]" },
-        { L"裁到入点 (Trim In)",     L"Alt+[" },
-        { L"裁到出点 (Trim Out)",    L"Alt+]" },
-        { L"跳到起点 (Go to Start)", L"Home" },
-        { L"跳到终点 (Go to End)",   L"End" },
-        { L"上一帧 (Prev Frame)",    L"Left" },
-        { L"下一帧 (Next Frame)",    L"Right" },
+        { L"设入点（设为当前帧）", L"API",
+          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setInFrame(sel[i],f);}return \"setIn \"+sel.length;})();" },
+        { L"设出点（设为当前帧）", L"API",
+          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setOutFrame(sel[i],f);}return \"setOut \"+sel.length;})();" },
+        { L"入点=当前帧（裁剪头部）", L"API",
+          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setInFrame(sel[i],f);}return \"trimIn \"+sel.length;})();" },
+        { L"出点=当前帧（裁剪尾部）", L"API",
+          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setOutFrame(sel[i],f);}return \"trimOut \"+sel.length;})();" },
+        { L"上一帧", L"API",
+          L"(function(){api.setFrame(api.getFrame()-1);return \"prev\";})();" },
+        { L"下一帧", L"API",
+          L"(function(){api.setFrame(api.getFrame()+1);return \"next\";})();" },
+        { L"跳到起点", L"API",
+          L"(function(){api.setFrame(0);return \"start\";})();" },
+        { L"跳到当前图层出点", L"API",
+          L"(function(){var sel=api.getSelection();if(!sel.length)return \"none\";api.setFrame(api.getOutFrame(sel[sel.length-1]));return \"toOut\";})();" },
     };
     for (auto& o : ops) {
         Item it;
         it.name = o.name;
-        it.kind = L"keys";
-        it.value = o.keys;
+        it.kind = L"ops";
+        it.value = o.js;
+        it.key = o.hint;
         it.cat = L"操作";
         g_index.push_back(it);
     }
@@ -547,7 +558,8 @@ static void RunItem(const Item& it) {
         RunScriptText(ReadFileUtf8(ExeDir() + L"\\actions\\" + it.value));
     } else if (it.kind == L"layer") {
         RunScriptText("(function(){var id=api.create(\"" + Narrow(it.value) + "\"); if(id) api.select([id]);})();");
-    } else if (it.kind == L"keys") {
+    } else if (it.kind == L"ops") {
+        RunScriptText(Narrow(it.value));
         {
     HideHotbox(g_main ? g_main : GetActiveWindow());
             Sleep(60);
@@ -1173,13 +1185,18 @@ static void DrawResults(HDC dc) {
         }
         SetTextColor(dc, RGB(210, 210, 210));
         {
+            if (g_results[i].kind == L"ops" && !g_results[i].key.empty()) {
+                SetTextColor(dc, RGB(165, 170, 180));
+                RECT kr2 = { r.right - 150, r.top, r.right - 66, r.bottom };
+                DrawTextW(dc, g_results[i].key.c_str(), -1, &kr2, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+            }
             if (g_results[i].kind == L"keys") {
                 SetTextColor(dc, RGB(165, 170, 180));
                 RECT kr = { r.right - 150, r.top, r.right - 66, r.bottom };
                 DrawTextW(dc, g_results[i].value.c_str(), -1, &kr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
             }
             RECT tg = { r.right - 60, r.top, r.right - 8, r.bottom };
-            std::wstring tagv = (g_results[i].kind == L"script") ? L"脚本" : ((g_results[i].kind == L"keys") ? L"操作" : L"图层");
+            std::wstring tagv = (g_results[i].kind == L"script") ? L"脚本" : ((g_results[i].kind == L"keys" || g_results[i].kind == L"ops") ? L"操作" : L"图层");
             DrawTextW(dc, tagv.c_str(), -1, &tg, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
         }
 
