@@ -1505,16 +1505,26 @@ static void Paint(HWND hwnd) {
     PAINTSTRUCT ps;
     HDC dc = BeginPaint(hwnd, &ps);
 
+    // 32 位 DIB：逐像素 alpha。纯黑（背景）= alpha 1，几乎看不见但可接收鼠标；
+    // 其它像素 = alpha 255。这样整块热盒区域都能滚轮/点击，不再穿透到 Cavalry。
+    BITMAPINFO bi = {};
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = g_winW;
+    bi.bmiHeader.biHeight = -g_winH;   // top-down
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
     HDC mem = CreateCompatibleDC(dc);
-    HBITMAP bmp = CreateCompatibleBitmap(dc, g_winW, g_winH);
-    HGDIOBJ old = SelectObject(mem, bmp);
+    HBITMAP bmp = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    HGDIOBJ old = bmp ? SelectObject(mem, bmp) : nullptr;
 
     RECT bg = { 0, 0, g_winW, g_winH };
     HBRUSH bb = CreateSolidBrush(kBg);
     FillRect(mem, &bg, bb);
     DeleteObject(bb);
 
-        if (g_mode == M_PIE) {
+    if (g_mode == M_PIE) {
         DrawPie(mem);
     } else if (g_mode == M_SEARCH) {
         std::wstring title = (g_bindSlot >= 0)
@@ -1542,6 +1552,7 @@ static void Paint(HWND hwnd) {
         DeleteObject(hf);
     }
     if (g_mode != M_SETTINGS) DrawTopIcons(mem);   // 设置页右上角是关闭按钮
+
     if (g_mode != M_PIE) {   // 仅搜索/设置页显示拖拽条
         RECT pr = PanelRect();
         HBRUSH gb = CreateSolidBrush(RGB(34, 34, 37));
@@ -1561,13 +1572,30 @@ static void Paint(HWND hwnd) {
         DeleteObject(gb);
     }
 
+    // 逐像素 alpha
+    if (bits) {
+        DWORD* px = (DWORD*)bits;
+        int n = g_winW * g_winH;
+        for (int i = 0; i < n; ++i) {
+            DWORD c = px[i] & 0x00FFFFFFu;
+            px[i] = (c == 0) ? 0x01000000u : (c | 0xFF000000u);
+        }
+        RECT wr; GetWindowRect(hwnd, &wr);
+        POINT dst = { wr.left, wr.top };
+        SIZE sz = { g_winW, g_winH };
+        POINT src = { 0, 0 };
+        BLENDFUNCTION bf = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+        HDC screen = GetDC(nullptr);
+        UpdateLayeredWindow(hwnd, screen, &dst, &sz, mem, &src, 0, &bf, ULW_ALPHA);
+        ReleaseDC(nullptr, screen);
+    }
 
-    BitBlt(dc, 0, 0, g_winW, g_winH, mem, 0, 0, SRCCOPY);
-    SelectObject(mem, old);
-    DeleteObject(bmp);
+    if (old) SelectObject(mem, old);
+    if (bmp) DeleteObject(bmp);
     DeleteDC(mem);
     EndPaint(hwnd, &ps);
 }
+
 
 // ---------------------------------------------------------------- 热键配置
 static std::wstring Trim(const std::wstring& s) {
@@ -1916,12 +1944,10 @@ static void ShowAtCursor(HWND hwnd) {
 { HDC dc0 = GetDC(hwnd); RECT rc0 = { 0, 0, g_winW, g_winH }; HBRUSH b0 = CreateSolidBrush(RGB(0,0,0)); FillRect(dc0, &rc0, b0); DeleteObject(b0); ReleaseDC(hwnd, dc0); }
     InvalidateRect(hwnd, nullptr, TRUE);
     UpdateWindow(hwnd);   // 先按"圆盘"画好，再显示
-    SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 1, LWA_COLORKEY | LWA_ALPHA);   // 先几乎透明，避免首帧残影
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, cavFrontAtShow ? SWP_SHOWWINDOW : (SWP_SHOWWINDOW | SWP_NOACTIVATE));
     SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, g_winW, g_winH, 0);
     InvalidateRect(hwnd, nullptr, TRUE);
     UpdateWindow(hwnd);   // 显示后立刻补画一帧，抵消首帧残影
-    SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);   // 画好后再恢复不透明
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
     if (cavFrontAtShow) ForceForeground(hwnd);   // 非 Cavalry 触发：不抢焦点
     if (g_edit) ShowWindow(g_edit, SW_HIDE);
@@ -2355,6 +2381,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
         }
+        if (g_mode == M_PIE && g_hover >= 0 && g_slots[g_hover].used) { RunItem(g_slots[g_hover]); return 0; }   // 空白处左键 = 确认悬停项
         return 0;
     }
     case WM_CTLCOLORSTATIC:
@@ -2631,7 +2658,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
                                 L"CavalryShortCut", L"Cavalry ShortCut", WS_POPUP | WS_CLIPCHILDREN,
                                 0, 0, g_winW, g_winH, nullptr, nullptr, inst, nullptr);
     g_main = hwnd;
-    SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);
     CreateEdit(hwnd, inst);
     ImmAssociateContext(hwnd, nullptr);   // 主窗口不吃输入法；输入框仍可用中文
     // 输入法保持启用：中文搜索需要它
