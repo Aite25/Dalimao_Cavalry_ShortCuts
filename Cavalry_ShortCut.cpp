@@ -586,6 +586,7 @@ static void RunItem(const Item& it) {
         } else if (item.kind == L"layer") {
             RunScriptText("(function(){var id=api.create(\"" + Narrow(item.value) + "\"); if(id) api.select([id]);})();");
         } else if (item.kind == L"ops") {
+            DWORD t0 = GetTickCount();
             std::string v = Narrow(item.value);
             size_t idx = (v.rfind("op:", 0) == 0) ? (size_t)atoi(v.c_str() + 3) : (size_t)-1;
             if (g_opsUseKeys && idx < g_opsHints.size()) {
@@ -604,6 +605,7 @@ static void RunItem(const Item& it) {
             } else if (idx != (size_t)-1) {
                 if (idx < g_opsJs.size()) RunScriptText(Narrow(g_opsJs[idx]));
             } else { RunScriptText(v); }
+            if (idx != (size_t)-1) Log("op took " + std::to_string(GetTickCount() - t0) + " ms");
         } else if (item.kind == L"keys") {
             SendCombo(item.value);
         }
@@ -1764,6 +1766,19 @@ static bool AnyCavalryVisible() {
 }
 
 static void TickCavalryState(HWND hotbox) {
+    {   // Cavalry 启动时预载一次：让第一次操作也快（不显示任何窗口）
+        static bool prevCav = false;
+        bool cavNow = AnyCavalryVisible();
+        if (cavNow && !prevCav) {
+            std::thread([]() {
+                EnsurePreamble();
+                std::string o; DWORD st = 0;
+                HttpCall(L"POST", L"/call", "{\"name\":\"execute_script\",\"args\":{\"script\":\"api.getFrame();\"}}", o, st);
+                Log("preload done");
+            }).detach();
+        }
+        prevCav = cavNow;
+    }
     // 只做一件事：热盒被别的窗口挡住时，把空格热键归还；露出来时再收回
     if (!g_msgWndGlobal) return;
     static bool spaceOn = false;
