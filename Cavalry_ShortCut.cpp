@@ -1706,6 +1706,8 @@ static void ShowAtCursor(HWND hwnd) {
     UpdateWindow(hwnd);   // 先按"圆盘"画好，再显示
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, SWP_SHOWWINDOW);   // 激活窗口，保证键盘事件进来
     SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, g_winW, g_winH, 0);
+    InvalidateRect(hwnd, nullptr, TRUE);
+    UpdateWindow(hwnd);   // 显示后立刻补画一帧，抵消首帧残影
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
     ForceForeground(hwnd);
     if (g_edit) ShowWindow(g_edit, SW_HIDE);
