@@ -101,6 +101,7 @@ static std::vector<std::wstring> g_pinned;   // 置顶项 key = kind + "|" + val
 static std::vector<std::wstring> g_opsJs;   // 操作项的 JS（按 index 引用，避免存进 json 被截断）
 static std::vector<std::wstring> g_opsNames;
 static std::vector<std::wstring> g_opsHints;   // 对应的原生快捷键
+static std::vector<std::wstring> g_opsFiles;   // 对应的脚本文件名（放在 Cavalry Scripts 目录）
 static bool g_opsUseKeys = false;   // 默认走 MCP（Cavalry 不响应模拟按键）
 static std::vector<Item> g_index;      // 搜索结果来源
 
@@ -543,37 +544,30 @@ static void SendCombo(const std::wstring& spec) {
 }
 
 static void LoadOps() {
-    // 每个操作都是一段通过 MCP 在 Cavalry 里执行的脚本，不依赖键盘模拟
-    struct Op { const wchar_t* name; const wchar_t* hint; const wchar_t* js; };
+    // 操作 = 调用 Cavalry 脚本目录里的 .js 文件（逻辑写在脚本里，接口变化时只需改脚本）
+    struct Op { const wchar_t* name; const wchar_t* hint; const wchar_t* file; };
     static const Op ops[] = {
-        { L"设入点（设为当前帧）", L"[",
-          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){var oldIn=api.getInFrame(sel[i]);if(oldIn!==f){api.offsetLayerTime(sel[i],(f-oldIn));}api.setInFrame(sel[i],f);}return \"setIn \"+sel.length;})();" },
-        { L"设出点（设为当前帧）", L"]",
-          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){var oldOut=api.getOutFrame(sel[i]);if(oldOut!==f){api.offsetLayerTime(sel[i],(f-oldOut));}api.setOutFrame(sel[i],f);}return \"setOut \"+sel.length;})();" },
-        { L"入点=当前帧（裁剪头部）", L"Alt+[",
-          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setInFrame(sel[i],f);}return \"trimIn \"+sel.length;})();" },
-        { L"出点=当前帧（裁剪尾部）", L"Alt+]",
-          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setOutFrame(sel[i],f);}return \"trimOut \"+sel.length;})();" },
-        { L"上一帧", L"Left",
-          L"(function(){api.setFrame(api.getFrame()-1);return \"prev\";})();" },
-        { L"下一帧", L"Right",
-          L"(function(){api.setFrame(api.getFrame()+1);return \"next\";})();" },
-        { L"跳到起点", L"Home",
-          L"(function(){api.setFrame(0);return \"start\";})();" },
-        { L"跳到当前图层出点", L"End",
-          L"(function(){var sel=api.getSelection();if(!sel.length)return \"none\";api.setFrame(api.getOutFrame(sel[sel.length-1]));return \"toOut\";})();" },
+        { L"设入点（设为当前帧）",     L"[",      L"op_set_in.js" },
+        { L"设出点（设为当前帧）",     L"]",      L"op_set_out.js" },
+        { L"入点=当前帧（裁剪头部）",  L"Alt+[",  L"op_trim_in.js" },
+        { L"出点=当前帧（裁剪尾部）",  L"Alt+]",  L"op_trim_out.js" },
+        { L"上一帧",                  L"Left",   L"op_prev_frame.js" },
+        { L"下一帧",                  L"Right",  L"op_next_frame.js" },
+        { L"跳到起点",                L"Home",   L"op_goto_start.js" },
+        { L"跳到当前图层出点",        L"End",    L"op_goto_layer_out.js" },
     };
     for (auto& o : ops) {
         Item it;
         it.name = o.name;
-        g_opsNames.push_back(it.name);
-        g_opsHints.push_back(o.hint);
         it.kind = L"ops";
-        it.value = L"op:" + std::to_wstring(g_opsJs.size());
-        g_opsJs.push_back(o.js);
+        it.value = L"op:" + std::to_wstring(g_opsNames.size());
         it.key = o.hint;
         it.cat = L"操作";
         g_index.push_back(it);
+        g_opsNames.push_back(it.name);
+        g_opsHints.push_back(o.hint);
+        g_opsFiles.push_back(o.file);
+        g_opsJs.push_back(o.file);   // 兼容：旧字段存文件名
     }
 }
 
@@ -603,7 +597,17 @@ static void RunItem(const Item& it) {
                 }
                 SendCombo(g_opsHints[idx]);
             } else if (idx != (size_t)-1) {
-                if (idx < g_opsJs.size()) RunScriptText(Narrow(g_opsJs[idx]));
+                if (idx < g_opsFiles.size()) {
+                    std::wstring dir1 = ExeDir() + L"\\Cavalry" ;
+                    wchar_t appdata[MAX_PATH] = {0};
+                    std::wstring p1, p2;
+                    if (GetEnvironmentVariableW(L"APPDATA", appdata, MAX_PATH)) p1 = std::wstring(appdata) + L"\\Cavalry\\Scripts\\" + g_opsFiles[idx];
+                    p2 = ExeDir() + L"\\scripts\\" + g_opsFiles[idx];
+                    std::string code = ReadFileUtf8(p1);
+                    if (code.empty()) code = ReadFileUtf8(p2);
+                    if (code.empty()) Log("op script missing: " + Narrow(g_opsFiles[idx]));
+                    else RunScriptText(code);
+                }
             } else { RunScriptText(v); }
             if (idx != (size_t)-1) Log("op took " + std::to_string(GetTickCount() - t0) + " ms");
         } else if (item.kind == L"keys") {
