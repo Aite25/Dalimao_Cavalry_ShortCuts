@@ -1545,7 +1545,7 @@ static void ShowAtCursor(HWND hwnd) {
     if (y + g_winH > work.bottom) y = work.bottom - g_winH;
 
     g_shownTick = GetTickCount();
-    SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+    SetWindowPos(hwnd, HWND_TOP, x, y, g_winW, g_winH, SWP_SHOWWINDOW | SWP_NOACTIVATE);
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
     ForceForeground(hwnd);
     if (g_msgWndGlobal) RegisterHotKey(g_msgWndGlobal, 2, MOD_NOREPEAT, VK_SPACE);   // 空格确认（仅热盒显示期间）
@@ -2175,7 +2175,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     RegisterClassW(&wc);
 
-    HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TOPMOST,
+    HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_LAYERED,
                                 L"CavalryShortCut", L"Cavalry ShortCut", WS_POPUP | WS_CLIPCHILDREN,
                                 0, 0, g_winW, g_winH, nullptr, nullptr, inst, nullptr);
     g_main = hwnd;
