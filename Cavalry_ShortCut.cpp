@@ -987,7 +987,11 @@ static void UpdateResults() {
         g_results = pref;
         for (auto& it : rest) g_results.push_back(it);
     }
-    if (g_sel >= (int)g_results.size()) g_sel = 0;
+    if (g_mode == M_SETTINGS) {
+        if (g_selSearch >= (int)g_results.size()) g_selSearch = 0;   // 设置页：不要动 g_sel（那是选中的扇区）
+    } else if (g_sel >= (int)g_results.size()) {
+        g_sel = 0;
+    }
 }
 
 // ---------------------------------------------------------------- 几何
