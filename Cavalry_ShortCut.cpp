@@ -526,21 +526,21 @@ static void LoadOps() {
     // 每个操作都是一段通过 MCP 在 Cavalry 里执行的脚本，不依赖键盘模拟
     struct Op { const wchar_t* name; const wchar_t* hint; const wchar_t* js; };
     static const Op ops[] = {
-        { L"设入点（设为当前帧）", L"API",
+        { L"设入点（设为当前帧）", L"[",
           L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setInFrame(sel[i],f);}return \"setIn \"+sel.length;})();" },
-        { L"设出点（设为当前帧）", L"API",
+        { L"设出点（设为当前帧）", L"]",
           L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setOutFrame(sel[i],f);}return \"setOut \"+sel.length;})();" },
-        { L"入点=当前帧（裁剪头部）", L"API",
+        { L"入点=当前帧（裁剪头部）", L"Alt+[",
           L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setInFrame(sel[i],f);}return \"trimIn \"+sel.length;})();" },
-        { L"出点=当前帧（裁剪尾部）", L"API",
+        { L"出点=当前帧（裁剪尾部）", L"Alt+]",
           L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setOutFrame(sel[i],f);}return \"trimOut \"+sel.length;})();" },
-        { L"上一帧", L"API",
+        { L"上一帧", L"Left",
           L"(function(){api.setFrame(api.getFrame()-1);return \"prev\";})();" },
-        { L"下一帧", L"API",
+        { L"下一帧", L"Right",
           L"(function(){api.setFrame(api.getFrame()+1);return \"next\";})();" },
-        { L"跳到起点", L"API",
+        { L"跳到起点", L"Home",
           L"(function(){api.setFrame(0);return \"start\";})();" },
-        { L"跳到当前图层出点", L"API",
+        { L"跳到当前图层出点", L"End",
           L"(function(){var sel=api.getSelection();if(!sel.length)return \"none\";api.setFrame(api.getOutFrame(sel[sel.length-1]));return \"toOut\";})();" },
     };
     for (auto& o : ops) {
