@@ -33,6 +33,8 @@ using namespace Gdiplus;
 #include <algorithm>
 #include <cstdio>
 #include <thread>
+#include <cmath>
+#include <vector>
 #include <ole2.h>
 #include <oleauto.h>
 #pragma comment(lib, "ole32.lib")
@@ -981,7 +983,7 @@ static RECT RowRect(int i) {
     r.left = p.left + 16;
     r.right = p.right - 34;
     r.top = p.top + 112 + i * 30;
-    r.bottom = r.top + 18;   // 27..45 → 中心 36
+    r.bottom = r.top + 14;   // 29..43 → 中心 36（与 Ctrl 行一致）
     return r;
 }
 
@@ -999,10 +1001,10 @@ static RECT TabRect(int i) {
 static RECT IconRect(int i) {   // 只保留设置（齿轮），忽略参数
     RECT p = PanelRect();
     RECT r;
-    r.right = p.right - 2;
+    r.right = p.right - 3;
     r.left = r.right - 18;
-    r.top = p.top + 27;   // 与 Ctrl 行（24..48）居中对齐
-    r.bottom = r.top + 18;   // 27..45 → 中心 36
+    r.top = p.top + 5;    // 绝对 29
+    r.bottom = r.top + 14;   // 29..43 → 中心 36（与 Ctrl 行一致）
     return r;
 }
 
@@ -1306,7 +1308,7 @@ static RECT SettingRowRect(int i) {
     r.left = p.left + 232;
     r.right = p.right - 16;
     r.top = p.top + 112 + i * 30;
-    r.bottom = r.top + 18;   // 27..45 → 中心 36
+    r.bottom = r.top + 14;   // 29..43 → 中心 36（与 Ctrl 行一致）
     return r;
 }
 
@@ -1466,34 +1468,50 @@ static void DrawTabs(HDC dc) {
     }
 }
 static void DrawTopIcons(HDC dc) {
-    // 右上角：设置齿轮（与 Ctrl 页签行垂直居中，右缘齐面板右边）
+    // 右上角：设置齿轮（小号，中心与 Ctrl 页签行对齐）
     RECT gr = IconRect(0);
-    {   // 底板（恢复）
-        RECT pill = { gr.left - 5, gr.top - 4, gr.right + 5, gr.bottom + 4 };
-        FillRound(dc, pill, 6, RGB(40, 40, 43), RGB(56, 56, 60));
+    {   // 底板
+        RECT pill = { gr.left - 4, gr.top - 4, gr.right + 4, gr.bottom + 4 };
+        FillRound(dc, pill, 5, RGB(40, 40, 43), RGB(56, 56, 60));
     }
     int cx = (gr.left + gr.right) / 2, cy = (gr.top + gr.bottom) / 2;
-    HBRUSH body = CreateSolidBrush(RGB(165, 165, 172));
-    HGDIOBJ ob = SelectObject(dc, body);
-    HGDIOBJ op = SelectObject(dc, GetStockObject(NULL_PEN));
-    // 8 个齿
-    const int tx[8] = { 0, 6, 8, 6, 0, -6, -8, -6 };
-    const int ty[8] = { -8, -6, 0, 6, 8, 6, 0, -6 };
-    for (int k = 0; k < 8; ++k) {
-        RECT t = { cx + tx[k] - 2, cy + ty[k] - 2, cx + tx[k] + 2, cy + ty[k] + 2 };
-        FillRect(dc, &t, body);
+    const double kPi = 3.14159265358979323846;
+    const double R = 6.0, Rin = 3.9;
+    const int teeth = 7;
+    const int steps = 320;
+
+    Gdiplus::Graphics g(dc);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    {
+        std::vector<Gdiplus::PointF> pts;
+        pts.reserve(steps + 2);
+        for (int i = 0; i <= steps; ++i) {
+            double th = (double)i / steps * 2 * kPi;
+            double ph = fmod(th * teeth / (2 * kPi), 1.0);
+            double rr;
+            if (ph < 0.44) {
+                rr = R;
+            } else if (ph < 0.54) {
+                double u = (ph - 0.44) / 0.10;
+                rr = R - u * (R - Rin);
+            } else {
+                rr = Rin;
+            }
+            pts.push_back(Gdiplus::PointF((Gdiplus::REAL)(cx + cos(th) * rr),
+                                          (Gdiplus::REAL)(cy + sin(th) * rr)));
+        }
+        Gdiplus::GraphicsPath path;
+        path.AddLines(&pts[0], (INT)pts.size());
+        path.CloseFigure();
+        Gdiplus::SolidBrush brush(Gdiplus::Color(255, 168, 168, 175));
+        g.FillPath(&brush, &path);
     }
-    Ellipse(dc, cx - 6, cy - 6, cx + 6, cy + 6);   // 轮体
-    SelectObject(dc, ob);
-    DeleteObject(body);
-    // 中心孔（用底板色挖空）
-    HBRUSH hole = CreateSolidBrush(RGB(40, 40, 43));
-    HGDIOBJ ob2 = SelectObject(dc, hole);
-    Ellipse(dc, cx - 2, cy - 2, cx + 3, cy + 3);
-    SelectObject(dc, ob2);
-    DeleteObject(hole);
-    SelectObject(dc, op);
+    {   // 中心孔：用底板色挖空
+        Gdiplus::SolidBrush hole(Gdiplus::Color(255, 40, 40, 43));
+        g.FillEllipse(&hole, (Gdiplus::REAL)(cx - 2), (Gdiplus::REAL)(cy - 2), 4.0f, 4.0f);
+    }
 }
+
 
 static const int kPadX = 320;   // 输入区左右扩展（透明）
 static const int kPadY = 120;   // 输入区上下扩展（透明）
