@@ -59,7 +59,7 @@ static const COLORREF kRowSel       = RGB(56, 119, 181);
 
 static const int kCenterR  = 28;
 static const int kRectW    = 150;
-static const int kRectH    = 34;
+static const int kRectH    = 28;
 static const int kOffVert  = 118;
 static const int kOffHoriz = 172;
 static const int kOffDiagX = 105;
@@ -988,13 +988,15 @@ static void DrawPie(HDC dc) {
             DrawTextW(dc, L"—", -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         } else {
             SetTextColor(dc, kText);
-            RECT tr = { r.left + 6, r.top, r.right - 6, r.bottom };
-            DrawTextW(dc, g_slots[i].name.c_str(), -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOCLIP);
+            RECT tr = { r.left + 10, r.top, r.right - 34, r.bottom };
+            DrawTextW(dc, g_slots[i].name.c_str(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOCLIP);
 
             SetTextColor(dc, kTextDim);
-            SetTextAlign(dc, TA_RIGHT | TA_TOP);
+            SetTextAlign(dc, TA_LEFT | TA_TOP);
             std::wstring k = g_slots[i].key.empty() ? std::to_wstring(i + 1) : g_slots[i].key;
-            TextOutW(dc, r.right - 8, r.top + 6, k.c_str(), (int)k.size());
+            RECT kr = { r.right - 32, r.top, r.right - 8, r.bottom };
+            SetTextAlign(dc, TA_LEFT | TA_TOP);
+            DrawTextW(dc, k.c_str(), -1, &kr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
         }
         SelectObject(dc, of);
         DeleteObject(f);
