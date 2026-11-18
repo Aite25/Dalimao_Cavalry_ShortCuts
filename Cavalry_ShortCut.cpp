@@ -2426,11 +2426,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (g_resizeEdges & 2) nh = g_resizeStartH + (rp.y - g_resizeStart.y);
             if (nw < 480) nw = 480;
             if (nh < 380) nh = 380;
-            g_winW = nw; g_winH = nh;
-            SetWindowPos(hwnd, HWND_TOP, 0, 0, nw, nh, SWP_NOMOVE | SWP_NOZORDER);
-            SyncEditFromMode();
-            UpdateScrollInfo();
-            InvalidateRect(hwnd, nullptr, TRUE);
+            if (nw != g_winW || nh != g_winH) {
+                g_winW = nw; g_winH = nh;
+                SetWindowPos(hwnd, HWND_TOP, 0, 0, nw + kPadX * 2, nh + kPadY * 2, SWP_NOMOVE | SWP_NOZORDER);
+                UpdateScrollInfo();
+                InvalidateRect(hwnd, nullptr, FALSE);   // 不擦背景，避免闪
+            }
             return 0;
         }
         if (g_mode == M_SEARCH) {
