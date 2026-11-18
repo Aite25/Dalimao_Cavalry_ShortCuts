@@ -114,8 +114,8 @@ static std::vector<Item> g_results;
 static void SyncEditFromMode();
 static void UpdateScrollInfo();
 static int g_tab = 0;
-static const wchar_t* kTabs[] = { L"全部", L"脚本", L"形状", L"行为", L"工具", L"效果" };
-static const int kTabCount = 6;
+static const wchar_t* kTabs[] = { L"全部", L"脚本", L"形状", L"行为", L"工具", L"效果", L"操作" };
+static const int kTabCount = 7;
 static HWND g_edit = nullptr;
 static HWND g_scrollbar = nullptr;
 static int g_scroll = 0;
@@ -447,11 +447,82 @@ static void RunScriptText(const std::string& script) {
              (out.find("\"isError\":false") != std::string::npos ? "ok" : "error"));
 }
 
+static std::wstring Trim(const std::wstring& s);
+// ---------------------------------------------------------------- 操作（快捷键）
+static UINT VkFromToken(const std::wstring& t) {
+    if (t.empty()) return 0;
+    std::wstring low = ToLower(t);
+    if (low == L"alt") return VK_MENU;
+    if (low == L"ctrl") return VK_CONTROL;
+    if (low == L"shift") return VK_SHIFT;
+    if (low == L"space") return VK_SPACE;
+    if (low == L"home") return VK_HOME;
+    if (low == L"end") return VK_END;
+    if (low == L"left") return VK_LEFT;
+    if (low == L"right") return VK_RIGHT;
+    if (low == L"up") return VK_UP;
+    if (low == L"down") return VK_DOWN;
+    if (low == L"enter") return VK_RETURN;
+    if (low == L"delete") return VK_DELETE;
+    if (t == L"[") return VK_OEM_4;
+    if (t == L"]") return VK_OEM_6;
+    if (t == L",") return VK_OEM_COMMA;
+    if (t == L".") return VK_OEM_PERIOD;
+    if (t == L"-") return VK_OEM_MINUS;
+    if (t == L"=") return VK_OEM_PLUS;
+    if (low.size() >= 2 && low[0] == L'f') { int n = _wtoi(low.c_str() + 1); if (n >= 1 && n <= 24) return VK_F1 + n - 1; }
+    if (t.size() == 1) { wchar_t c = (wchar_t)towupper(t[0]); if ((c >= L'A' && c <= L'Z') || (c >= L'0' && c <= L'9')) return (UINT)c; }
+    return 0;
+}
+
+static void SendCombo(const std::wstring& spec) {
+    std::vector<UINT> keys;
+    size_t start = 0;
+    while (start <= spec.size()) {
+        size_t plus = spec.find(L'+', start);
+        std::wstring tok = Trim(plus == std::wstring::npos ? spec.substr(start) : spec.substr(start, plus - start));
+        UINT vk = VkFromToken(tok);
+        if (vk) keys.push_back(vk);
+        if (plus == std::wstring::npos) break;
+        start = plus + 1;
+    }
+    if (keys.empty()) return;
+    std::vector<INPUT> ins;
+    for (auto vk : keys) { INPUT i = {}; i.type = INPUT_KEYBOARD; i.ki.wVk = (WORD)vk; ins.push_back(i); }
+    for (auto it = keys.rbegin(); it != keys.rend(); ++it) { INPUT i = {}; i.type = INPUT_KEYBOARD; i.ki.wVk = (WORD)*it; i.ki.dwFlags = KEYEVENTF_KEYUP; ins.push_back(i); }
+    SendInput((UINT)ins.size(), ins.data(), sizeof(INPUT));
+    Log("sent combo " + Narrow(spec));
+}
+
+static void LoadOps() {
+    struct Op { const wchar_t* name; const wchar_t* keys; };
+    static const Op ops[] = {
+        { L"设入点 (Set In)",        L"[" },
+        { L"设出点 (Set Out)",       L"]" },
+        { L"裁到入点 (Trim In)",     L"Alt+[" },
+        { L"裁到出点 (Trim Out)",    L"Alt+]" },
+        { L"跳到起点 (Go to Start)", L"Home" },
+        { L"跳到终点 (Go to End)",   L"End" },
+        { L"上一帧 (Prev Frame)",    L"Left" },
+        { L"下一帧 (Next Frame)",    L"Right" },
+    };
+    for (auto& o : ops) {
+        Item it;
+        it.name = o.name;
+        it.kind = L"keys";
+        it.value = o.keys;
+        it.cat = L"操作";
+        g_index.push_back(it);
+    }
+}
+
 static void RunItem(const Item& it) {
     if (it.kind == L"script") {
         RunScriptText(ReadFileUtf8(ExeDir() + L"\\actions\\" + it.value));
     } else if (it.kind == L"layer") {
         RunScriptText("(function(){var id=api.create(\"" + Narrow(it.value) + "\"); if(id) api.select([id]);})();");
+    } else if (it.kind == L"keys") {
+        SendCombo(it.value);
     }
     ShowWindow(g_main, SW_HIDE);
     g_mode = M_PIE;
@@ -1060,7 +1131,7 @@ static void DrawResults(HDC dc) {
         SetTextColor(dc, RGB(210, 210, 210));
         {
             RECT tg = { r.right - 60, r.top, r.right - 8, r.bottom };
-            std::wstring tagv = (g_results[i].kind == L"script") ? L"脚本" : L"图层";
+            std::wstring tagv = (g_results[i].kind == L"script") ? L"脚本" : ((g_results[i].kind == L"keys") ? L"操作" : L"图层");
             DrawTextW(dc, tagv.c_str(), -1, &tg, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
         }
 
@@ -2208,6 +2279,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     InitIcons();
     LoadConfig();
     LoadIndex();
+    LoadOps();
     {
         std::string raw = ReadFileUtf8(ExeDir() + L"\\Cavalry_ShortCut_pinned.txt");
         size_t st = 0;
