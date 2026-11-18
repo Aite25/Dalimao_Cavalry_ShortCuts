@@ -1501,23 +1501,20 @@ static void DrawTopIcons(HDC dc) {
     DeleteObject(pen);
 }
 
+static const int kPadX = 320;   // 输入区左右扩展（透明）
+static const int kPadY = 120;   // 输入区上下扩展（透明）
+
 static void Paint(HWND hwnd) {
     PAINTSTRUCT ps;
     HDC dc = BeginPaint(hwnd, &ps);
 
-    // 32 位 DIB：逐像素 alpha。纯黑（背景）= alpha 1，几乎看不见但可接收鼠标；
-    // 其它像素 = alpha 255。这样整块热盒区域都能滚轮/点击，不再穿透到 Cavalry。
-    BITMAPINFO bi = {};
-    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bi.bmiHeader.biWidth = g_winW;
-    bi.bmiHeader.biHeight = -g_winH;   // top-down
-    bi.bmiHeader.biPlanes = 1;
-    bi.bmiHeader.biBitCount = 32;
-    bi.bmiHeader.biCompression = BI_RGB;
-    void* bits = nullptr;
+    const int winW = g_winW + kPadX * 2;
+    const int winH = g_winH + kPadY * 2;
+
+    // 1) 先按原来的尺寸把界面画好（坐标体系完全不变）
     HDC mem = CreateCompatibleDC(dc);
-    HBITMAP bmp = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
-    HGDIOBJ old = bmp ? SelectObject(mem, bmp) : nullptr;
+    HBITMAP bmp = CreateCompatibleBitmap(dc, g_winW, g_winH);
+    HGDIOBJ old = SelectObject(mem, bmp);
 
     RECT bg = { 0, 0, g_winW, g_winH };
     HBRUSH bb = CreateSolidBrush(kBg);
@@ -1551,7 +1548,7 @@ static void Paint(HWND hwnd) {
         SelectObject(mem, ho);
         DeleteObject(hf);
     }
-    if (g_mode != M_SETTINGS) DrawTopIcons(mem);   // 设置页右上角是关闭按钮
+    if (g_mode != M_SETTINGS) DrawTopIcons(mem);
 
     if (g_mode != M_PIE) {   // 仅搜索/设置页显示拖拽条
         RECT pr = PanelRect();
@@ -1572,29 +1569,78 @@ static void Paint(HWND hwnd) {
         DeleteObject(gb);
     }
 
-    // 逐像素 alpha
+    // 2) 放大到整块输入区：黑色背景 + 居中的界面 + 边缘小点
+    BITMAPINFO bi = {};
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = winW;
+    bi.bmiHeader.biHeight = -winH;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HDC big = CreateCompatibleDC(dc);
+    HBITMAP bigBmp = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    HGDIOBJ oldBig = bigBmp ? SelectObject(big, bigBmp) : nullptr;
+
+    RECT all = { 0, 0, winW, winH };
+    HBRUSH nb = CreateSolidBrush(RGB(0, 0, 0));
+    FillRect(big, &all, nb);
+    DeleteObject(nb);
+
+    BitBlt(big, kPadX, kPadY, g_winW, g_winH, mem, 0, 0, SRCCOPY);
+
+    {   // 边缘提示点：暗示这块区域会接收鼠标
+        HBRUSH dot = CreateSolidBrush(RGB(56, 56, 62));
+        HBRUSH corner = CreateSolidBrush(RGB(96, 96, 106));
+        const int step = 32, s = 2;
+        for (int x = 12; x < winW - 6; x += step) {
+            RECT t1 = { x, 8, x + s, 8 + s };
+            RECT t2 = { x, winH - 10, x + s, winH - 10 + s };
+            FillRect(big, &t1, dot); FillRect(big, &t2, dot);
+        }
+        for (int y = 12; y < winH - 6; y += step) {
+            RECT t1 = { 8, y, 8 + s, y + s };
+            RECT t2 = { winW - 10, y, winW - 10 + s, y + s };
+            FillRect(big, &t1, dot); FillRect(big, &t2, dot);
+        }
+        RECT c1 = { 8, 8, 22, 11 }, c2 = { 8, 8, 11, 22 };
+        RECT c3 = { winW - 22, 8, winW - 8, 11 }, c4 = { winW - 11, 8, winW - 8, 22 };
+        RECT c5 = { 8, winH - 11, 22, winH - 8 }, c6 = { 8, winH - 22, 11, winH - 8 };
+        RECT c7 = { winW - 22, winH - 11, winW - 8, winH - 8 }, c8 = { winW - 11, winH - 22, winW - 8, winH - 8 };
+        FillRect(big, &c1, corner); FillRect(big, &c2, corner);
+        FillRect(big, &c3, corner); FillRect(big, &c4, corner);
+        FillRect(big, &c5, corner); FillRect(big, &c6, corner);
+        FillRect(big, &c7, corner); FillRect(big, &c8, corner);
+        DeleteObject(dot); DeleteObject(corner);
+    }
+
+    // 3) 逐像素 alpha：纯黑=1（不可见但可点），其它=255
     if (bits) {
         DWORD* px = (DWORD*)bits;
-        int n = g_winW * g_winH;
+        int n = winW * winH;
         for (int i = 0; i < n; ++i) {
             DWORD c = px[i] & 0x00FFFFFFu;
             px[i] = (c == 0) ? 0x01000000u : (c | 0xFF000000u);
         }
         RECT wr; GetWindowRect(hwnd, &wr);
         POINT dst = { wr.left, wr.top };
-        SIZE sz = { g_winW, g_winH };
+        SIZE sz = { winW, winH };
         POINT src = { 0, 0 };
         BLENDFUNCTION bf = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
         HDC screen = GetDC(nullptr);
-        UpdateLayeredWindow(hwnd, screen, &dst, &sz, mem, &src, 0, &bf, ULW_ALPHA);
+        UpdateLayeredWindow(hwnd, screen, &dst, &sz, big, &src, 0, &bf, ULW_ALPHA);
         ReleaseDC(nullptr, screen);
     }
 
+    if (oldBig) SelectObject(big, oldBig);
+    if (bigBmp) DeleteObject(bigBmp);
+    DeleteDC(big);
     if (old) SelectObject(mem, old);
     if (bmp) DeleteObject(bmp);
     DeleteDC(mem);
     EndPaint(hwnd, &ps);
 }
+
 
 
 // ---------------------------------------------------------------- 热键配置
@@ -1930,22 +1976,23 @@ static void ShowAtCursor(HWND hwnd) {
 
     POINT c;
     GetCursorPos(&c);
-    int x = c.x - g_winW / 2, y = c.y - g_winH / 2;
+    const int winW = g_winW + kPadX * 2, winH = g_winH + kPadY * 2;
+    int x = c.x - g_winW / 2 - kPadX, y = c.y - g_winH / 2 - kPadY;
     RECT work;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
     if (x < work.left) x = work.left;
     if (y < work.top) y = work.top;
-    if (x + g_winW > work.right) x = work.right - g_winW;
-    if (y + g_winH > work.bottom) y = work.bottom - g_winH;
+    if (x + winW > work.right) x = work.right - winW;
+    if (y + winH > work.bottom) y = work.bottom - winH;
 
     g_shownTick = GetTickCount();
     g_focusRetry = cavFrontAtShow ? 60 : 0;
     // 先短暂置顶再取消：确保能盖住当前前台窗口，但之后仍可被其它窗口覆盖
-{ HDC dc0 = GetDC(hwnd); RECT rc0 = { 0, 0, g_winW, g_winH }; HBRUSH b0 = CreateSolidBrush(RGB(0,0,0)); FillRect(dc0, &rc0, b0); DeleteObject(b0); ReleaseDC(hwnd, dc0); }
+{ HDC dc0 = GetDC(hwnd); RECT rc0 = { 0, 0, winW, winH }; HBRUSH b0 = CreateSolidBrush(RGB(0,0,0)); FillRect(dc0, &rc0, b0); DeleteObject(b0); ReleaseDC(hwnd, dc0); }
     InvalidateRect(hwnd, nullptr, TRUE);
     UpdateWindow(hwnd);   // 先按"圆盘"画好，再显示
-    SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, cavFrontAtShow ? SWP_SHOWWINDOW : (SWP_SHOWWINDOW | SWP_NOACTIVATE));
-    SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, g_winW, g_winH, 0);
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, winW, winH, cavFrontAtShow ? SWP_SHOWWINDOW : (SWP_SHOWWINDOW | SWP_NOACTIVATE));
+    SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, winW, winH, 0);
     InvalidateRect(hwnd, nullptr, TRUE);
     UpdateWindow(hwnd);   // 显示后立刻补画一帧，抵消首帧残影
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
@@ -2017,6 +2064,12 @@ static void OpenPath(const std::wstring& path) {
 }
 
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_MOUSEMOVE || msg == WM_LBUTTONDOWN || msg == WM_LBUTTONUP || msg == WM_LBUTTONDBLCLK ||
+        msg == WM_RBUTTONDOWN || msg == WM_RBUTTONUP) {
+        int mx = GET_X_LPARAM(lp) - kPadX;
+        int my = GET_Y_LPARAM(lp) - kPadY;
+        lp = MAKELPARAM((WORD)(short)mx, (WORD)(short)my);
+    }
     switch (msg) {
     case WM_TIMER:
         {   // 仅当 Cavalry 或热盒自己在前台时才占用热键
