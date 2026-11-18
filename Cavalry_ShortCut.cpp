@@ -2166,6 +2166,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 return 0;
             }
             if (p.x >= fold.left && p.x < fold.right && p.y >= fold.top && p.y < fold.bottom) {
+                Log("folder icon hit");
                 {
                     std::wstring dir = ExeDir() + L"\\actions";
                     bool okPidl = OpenFolderViaPidl(dir);
@@ -2188,6 +2189,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     }
                 }
             }
+                return 0;   // 打开文件夹后不再落到扇区判定
         }
 
         // 搜索页签
