@@ -50,8 +50,8 @@ using namespace Gdiplus;
 static const int kBridgePort = 6769;
 static int g_winW = 640;
 static int g_winH = 560;
-static const int kPadX = 320;   // 透明输入区左右扩展
-static const int kPadY = 120;   // 透明输入区上下扩展
+static const int kPadX = 180;   // 透明输入区左右扩展
+static const int kPadY = 70;    // 透明输入区上下扩展
 
 static const COLORREF kBg          = RGB(0, 0, 0);        // 色键透明
 static const COLORREF kSectorFill  = RGB(35, 35, 35);
@@ -1152,12 +1152,24 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
     // 输入框
     RECT ir = InputRect();
     FillRound(dc, ir, 8, RGB(22, 22, 24), RGB(80, 80, 84));
-    if (input.empty()) {
-    HFONT fi = MakeFont(16);
+    {   // 输入内容自己画：分层窗口（UpdateLayeredWindow）内的子窗口 EDIT 不会被合成
+        HFONT fi = MakeFont(16);
         of = SelectObject(dc, fi);
-        SetTextColor(dc, RGB(110, 110, 110));
-        RECT irc = ir; irc.left += 10;
-        DrawTextW(dc, L"输入以搜索（Tab / Esc 返回）", -1, &irc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        SetTextColor(dc, input.empty() ? RGB(110, 110, 110) : RGB(235, 235, 240));
+        RECT irc = ir; irc.left += 10; irc.right -= 10;
+        DrawTextW(dc, input.empty() ? L"输入以搜索（Tab / Esc 返回）" : input.c_str(), -1, &irc,
+                  DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        if (!input.empty()) {
+            SIZE sz = { 0, 0 };
+            GetTextExtentPoint32W(dc, input.c_str(), (int)input.size(), &sz);
+            int cxp = irc.left + sz.cx + 1;
+            if (cxp < irc.right) {
+                RECT cr = { cxp, ir.top + 8, cxp + 2, ir.bottom - 8 };
+                HBRUSH cbr = CreateSolidBrush(RGB(200, 205, 215));
+                FillRect(dc, &cr, cbr);
+                DeleteObject(cbr);
+            }
+        }
         SelectObject(dc, of);
         DeleteObject(fi);
     }
