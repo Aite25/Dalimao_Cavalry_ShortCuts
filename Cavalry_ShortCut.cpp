@@ -1606,13 +1606,17 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         TickCavalryState(hwnd);
         {   // 触发器：Cavalry 脚本写文件 -> 呼出热盒（替代全局热键）
             static wchar_t trig[MAX_PATH] = {0};
+            static FILETIME lastTrig = {0, 0};
             if (!trig[0]) {
                 wchar_t* env = nullptr; size_t len = 0;
                 _wdupenv_s(&env, &len, L"TEMP");
                 if (env) { wcscpy_s(trig, env); wcscat_s(trig, L"\\CavalryShortCut.show"); free(env); }
             }
-            if (trig[0] && GetFileAttributesW(trig) != INVALID_FILE_ATTRIBUTES) {
-                DeleteFileW(trig);
+            WIN32_FILE_ATTRIBUTE_DATA fad = {};
+            bool cavThere = AnyCavalryVisible();
+            bool trigHit = cavThere && trig[0] && GetFileAttributesExW(trig, GetFileExInfoStandard, &fad) && CompareFileTime(&fad.ftLastWriteTime, &lastTrig) != 0;
+            if (trigHit) {
+                lastTrig = fad.ftLastWriteTime;
                 if (!IsWindowVisible(hwnd) || g_mode != M_PIE) ShowAtCursor(hwnd);
                 InvalidateRect(hwnd, nullptr, TRUE);
             }
