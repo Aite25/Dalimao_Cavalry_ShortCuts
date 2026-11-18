@@ -100,6 +100,8 @@ static Item g_bindItem;            // 待绑定的搜索项
 static std::vector<std::wstring> g_pinned;   // 置顶项 key = kind + "|" + value
 static std::vector<std::wstring> g_opsJs;   // 操作项的 JS（按 index 引用，避免存进 json 被截断）
 static std::vector<std::wstring> g_opsNames;
+static std::vector<std::wstring> g_opsHints;   // 对应的原生快捷键
+static bool g_opsUseKeys = true;   // ini: opsmode=keys|mcp
 static std::vector<Item> g_index;      // 搜索结果来源
 
 enum Mode { M_PIE, M_SEARCH, M_SETTINGS };
@@ -565,6 +567,7 @@ static void LoadOps() {
         Item it;
         it.name = o.name;
         g_opsNames.push_back(it.name);
+        g_opsHints.push_back(o.hint);
         it.kind = L"ops";
         it.value = L"op:" + std::to_wstring(g_opsJs.size());
         g_opsJs.push_back(o.js);
@@ -584,10 +587,23 @@ static void RunItem(const Item& it) {
             RunScriptText("(function(){var id=api.create(\"" + Narrow(item.value) + "\"); if(id) api.select([id]);})();");
         } else if (item.kind == L"ops") {
             std::string v = Narrow(item.value);
-            if (v.rfind("op:", 0) == 0) {
-                size_t idx = (size_t)atoi(v.c_str() + 3);
+            size_t idx = (v.rfind("op:", 0) == 0) ? (size_t)atoi(v.c_str() + 3) : (size_t)-1;
+            if (g_opsUseKeys && idx < g_opsHints.size()) {
+                HWND cav = g_cavalryWnd;
+                if (!cav || !IsWindow(cav)) { HWND fg = GetForegroundWindow(); if (IsCavalryWindow(fg)) cav = fg; }
+                if (cav && IsWindow(cav)) {
+                    HWND fgNow = GetForegroundWindow();
+                    DWORD fgTid = fgNow ? GetWindowThreadProcessId(fgNow, nullptr) : 0;
+                    DWORD cavTid = GetWindowThreadProcessId(cav, nullptr);
+                    if (fgTid && cavTid && fgTid != cavTid) AttachThreadInput(fgTid, cavTid, TRUE);
+                    BringWindowToTop(cav); SetForegroundWindow(cav);
+                    if (fgTid && cavTid && fgTid != cavTid) AttachThreadInput(fgTid, cavTid, FALSE);
+                    Sleep(60);
+                }
+                SendCombo(g_opsHints[idx]);
+            } else if (idx != (size_t)-1) {
                 if (idx < g_opsJs.size()) RunScriptText(Narrow(g_opsJs[idx]));
-            } else { RunScriptText(v); }   // 兼容旧绑定（直接存 JS）
+            } else { RunScriptText(v); }
         } else if (item.kind == L"keys") {
             SendCombo(item.value);
         }
@@ -1578,6 +1594,11 @@ static void LoadConfig() {
         std::string line = raw.substr(pos, eol == std::string::npos ? std::string::npos : eol - pos);
         pos = (eol == std::string::npos) ? raw.size() : eol + 1;
         while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+        if (line.rfind("opsmode=", 0) == 0) {
+            std::wstring v = Trim(Widen(line.substr(8)));
+            g_opsUseKeys = (ToLower(v) != L"mcp");
+            return;
+        }
         if (line.rfind("ime=", 0) == 0) {
             g_imeOn = (line.find("off") == std::string::npos);
             continue;
@@ -1735,25 +1756,6 @@ static DWORD g_shownTick = 0;
 static bool g_forceShow = false;   // 仅调试用：--show-force 时即使 Cavalry 没开也显示
 static DWORD g_lastWarm = 0;
 
-static void WarmBridgeAsync(bool force = false) {
-    if (!force && GetTickCount() - g_lastWarm < 20000) return;   // 20s 内不重复
-    g_lastWarm = GetTickCount();
-    std::thread([]() {
-        // Cavalry 刚启动时桥可能还没连上：最多重试 10 次，成功即停
-        for (int i = 0; i < 10; ++i) {
-            g_preambleDone = false;
-            EnsurePreamble();
-            std::string o; DWORD st = 0;
-            if (HttpCall(L"POST", L"/call", "{\"name\":\"execute_script\",\"args\":{\"script\":\"1\"}}", o, st) &&
-                o.find("\"isError\":false") != std::string::npos) {
-                Log("warmup done (try " + std::to_string(i + 1) + ")");
-                return;
-            }
-            Sleep(800);
-        }
-        Log("warmup failed");
-    }).detach();
-}
 
 static bool AnyCavalryVisible() {
     CavProbe pr = { false, false };
@@ -1762,12 +1764,6 @@ static bool AnyCavalryVisible() {
 }
 
 static void TickCavalryState(HWND hotbox) {
-    {   // Cavalry 刚启动时自动预热一次（覆盖"先开热盒、后开 Cavalry"）
-        static bool prevCav = false;
-        bool cavNow = AnyCavalryVisible();
-        if (cavNow && !prevCav) WarmBridgeAsync(true);
-        prevCav = cavNow;
-    }
     // 只做一件事：热盒被别的窗口挡住时，把空格热键归还；露出来时再收回
     if (!g_msgWndGlobal) return;
     static bool spaceOn = false;
@@ -1840,7 +1836,6 @@ static void HideHotbox(HWND hwnd) {
 }
 
 static void ShowAtCursor(HWND hwnd) {
-    WarmBridgeAsync();   // 每次呼出都确保桥会话是热的
     if (!g_forceShow && !AnyCavalryVisible()) { Log("show skipped: cavalry not running"); return; }
     bool cavFrontAtShow = IsCavalryWindow(GetForegroundWindow());   // 只有从 Cavalry 触发才抢焦点
     if (IsWindowVisible(hwnd)) ShowWindow(hwnd, SW_HIDE);   // 先藏起来，避免旧画面（搜索面板）闪一下
@@ -2574,14 +2569,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     bool alive = BridgeAlive();
     if (!alive) alive = StartBridge();
     Log(std::string("bridge ") + (alive ? "ok" : "not connected"));
-    if (alive) {
-        std::thread([]() {   // 预热：让桥与 Cavalry 的会话先建立，避免第一次操作卡顿
-            EnsurePreamble();
-            std::string o; DWORD st = 0;
-            HttpCall(L"POST", L"/call", "{\"name\":\"execute_script\",\"args\":{\"script\":\"1\"}}", o, st);
-            Log("warmup done");
-        }).detach();
-    }
 
     WNDCLASSW wc = {};
     wc.lpfnWndProc = WndProc;
