@@ -2381,7 +2381,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
         }
-        if (g_mode == M_SEARCH && IsWindowVisible(hwnd) && g_edit && !g_inMenu) {   // 弹出菜单时别抢焦点，否则菜单一闪就没
+        if ((g_mode == M_SEARCH || g_mode == M_SETTINGS) && IsWindowVisible(hwnd) && g_edit && !g_inMenu) {
             if (GetFocus() != g_edit) SetFocus(g_edit);
         }
         return 0;
@@ -2728,7 +2728,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 
     case WM_CHAR: {
-        if (g_mode == M_SEARCH) {
+        if (g_mode == M_SEARCH || g_mode == M_SETTINGS) {
             if (g_selAll) { g_query.clear(); g_selAll = false; if (g_edit) SetWindowTextW(g_edit, L""); }
             if (g_edit) {   // 消息能到主窗口，就说明字符是冲我们来的，一律转交
                 SendMessageW(g_edit, WM_CHAR, wp, lp);
