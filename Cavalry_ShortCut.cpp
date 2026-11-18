@@ -1107,6 +1107,23 @@ static void DrawScrollBar(HDC dc) {
     FillRound(dc, th, 3, g_thumbDrag ? RGB(150, 150, 158) : RGB(110, 110, 118), RGB(110, 110, 118));
 }
 
+static void DrawKeyCap(HDC dc, const std::wstring& s, int rightX, RECT row) {
+    if (s.empty()) return;
+    HFONT f = MakeFont(12);
+    HGDIOBJ of = SelectObject(dc, f);
+    SIZE sz = {0, 0};
+    GetTextExtentPoint32W(dc, s.c_str(), (int)s.size(), &sz);
+    int h = 18, padX = 7;
+    int cy = (row.top + row.bottom) / 2;
+    RECT b = { rightX - sz.cx - padX * 2, cy - h / 2, rightX, cy + h / 2 };
+    FillRound(dc, b, 4, RGB(46, 46, 51), RGB(74, 74, 82));
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(205, 210, 220));
+    DrawTextW(dc, s.c_str(), -1, &b, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
+    SelectObject(dc, of);
+    DeleteObject(f);
+}
+
 static bool IsPinnedItem(const Item& it) {
     std::wstring key = it.kind + L"|" + it.value;
     for (auto& k : g_pinned) if (k == key) return true;
@@ -1170,15 +1187,9 @@ static void DrawResults(HDC dc) {
         }
         SetTextColor(dc, RGB(210, 210, 210));
         {
-            if (g_results[i].kind == L"ops" && !g_results[i].key.empty()) {
-                SetTextColor(dc, RGB(165, 170, 180));
-                RECT kr2 = { r.right - 150, r.top, r.right - 66, r.bottom };
-                DrawTextW(dc, g_results[i].key.c_str(), -1, &kr2, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
-            }
-            if (g_results[i].kind == L"keys") {
-                SetTextColor(dc, RGB(165, 170, 180));
-                RECT kr = { r.right - 150, r.top, r.right - 66, r.bottom };
-                DrawTextW(dc, g_results[i].value.c_str(), -1, &kr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+            if ((g_results[i].kind == L"ops" && !g_results[i].key.empty()) || g_results[i].kind == L"keys") {
+                std::wstring hint = (g_results[i].kind == L"ops") ? g_results[i].key : g_results[i].value;
+                DrawKeyCap(dc, hint, r.right - 66, r);
             }
             RECT tg = { r.right - 60, r.top, r.right - 8, r.bottom };
             std::wstring tagv = (g_results[i].kind == L"script") ? L"脚本" : ((g_results[i].kind == L"keys" || g_results[i].kind == L"ops") ? L"操作" : L"图层");
