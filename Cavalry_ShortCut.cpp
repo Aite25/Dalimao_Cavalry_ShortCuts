@@ -534,7 +534,7 @@ static void LoadOps() {
         { L"设入点（设为当前帧）", L"[",
           L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){var oldIn=api.getInFrame(sel[i]);if(oldIn!==f){api.offsetLayerTime(sel[i],(f-oldIn));}api.setInFrame(sel[i],f);}return \"setIn \"+sel.length;})();" },
         { L"设出点（设为当前帧）", L"]",
-          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setOutFrame(sel[i],f);}return \"setOut \"+sel.length;})();" },
+          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){var oldOut=api.getOutFrame(sel[i]);if(oldOut!==f){api.offsetLayerTime(sel[i],(f-oldOut));}api.setOutFrame(sel[i],f);}return \"setOut \"+sel.length;})();" },
         { L"入点=当前帧（裁剪头部）", L"Alt+[",
           L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setInFrame(sel[i],f);}return \"trimIn \"+sel.length;})();" },
         { L"出点=当前帧（裁剪尾部）", L"Alt+]",
