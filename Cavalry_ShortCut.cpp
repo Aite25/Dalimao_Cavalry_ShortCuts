@@ -1453,7 +1453,7 @@ static RECT SetRingRect(int i) {
     int cx = p.left + 250, cy = p.top + 290;
     int ox = 0, oy = 0;
     const double s = 0.85;
-    const int dx = (int)(kOffDiagX * s), dy = (int)(kOffVert * s);
+    const int dx = (int)(kOffHoriz * s), dy = (int)(kOffVert * s);   // E/W 用水平偏移，与斜向分开
     const int ddx = (int)(kOffDiagX * s), ddy = (int)(kOffDiagY * s);
     switch (i) {
         case 0: oy = -dy; break;
