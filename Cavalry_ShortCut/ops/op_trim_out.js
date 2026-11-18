@@ -1,4 +1,4 @@
-// name: 出点=当前帧（裁剪尾部）
+// name: 裁剪出点
 // key: Alt+]
 // Trim out point to playhead (content stays)
 (function () {

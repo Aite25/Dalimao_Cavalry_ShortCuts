@@ -1,4 +1,4 @@
-// name: 整体移动：入点对齐播放头（Move In）
+// name: 整体入点对齐
 // key: 
 // Move In Point (like AE Dalimao "Move In Point")
 // Moves ALL selected layers together so the EARLIEST layer start lands on the playhead.

@@ -1,4 +1,4 @@
-// name: 设入点（设为当前帧）
+// name: 设入点
 // key: [
 // Set In Point at playhead — content shifts so the layer starts at the playhead
 (function () {
