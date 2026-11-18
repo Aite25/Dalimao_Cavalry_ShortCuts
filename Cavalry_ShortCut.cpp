@@ -1377,10 +1377,20 @@ static HWND g_msgWndGlobal = nullptr;
 static bool g_hotkeyOn = false;
 
 static void SetHotkeyEnabled(bool on) {
-    if (on == g_hotkeyOn || !g_msgWndGlobal) return;
-    if (on) RegisterHotKey(g_msgWndGlobal, 1, g_hotkeyMods, g_hotkeyVk);
-    else    UnregisterHotKey(g_msgWndGlobal, 1);
-    g_hotkeyOn = on;
+    if (!g_msgWndGlobal) return;
+    if (on) {
+        if (g_hotkeyOn) return;
+        if (RegisterHotKey(g_msgWndGlobal, 1, g_hotkeyMods, g_hotkeyVk)) {
+            g_hotkeyOn = true;
+            Log("hotkey registered");
+        } else {
+            Log("hotkey register FAILED err=" + std::to_string(GetLastError()));
+        }
+    } else {
+        if (!g_hotkeyOn) return;
+        UnregisterHotKey(g_msgWndGlobal, 1);
+        g_hotkeyOn = false;
+    }
 }
 static bool IsCavalryWindow(HWND h) {
     DWORD pid = 0;
@@ -2058,6 +2068,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         ShowAtCursor(hwnd);
         return 0;
     case WM_HOTKEY:
+        Log("WM_HOTKEY id=" + std::to_string((int)wp));
         if (wp == HOTKEY_TOGGLE) {
             HWND target = g_main ? g_main : hwnd;
             bool visible = IsWindowVisible(target);
