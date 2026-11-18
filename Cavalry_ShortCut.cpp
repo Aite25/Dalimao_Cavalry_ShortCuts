@@ -2270,6 +2270,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             POINT pt; GetCursorPos(&pt);
             int nx = pt.x - g_dragOffset.x, ny = pt.y - g_dragOffset.y;
             SetWindowPos(hwnd, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+            if (g_mode == M_SEARCH) SyncEditFromMode();   // 拖动时输入框（独立小窗）跟着主窗口走
             return 0;
         }
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
