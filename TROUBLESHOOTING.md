@@ -321,6 +321,50 @@ UpdateLayeredWindow(hwnd, screen, &dst, &sz, mem, &src, 0, &blend, ULW_ALPHA);
 - 任何"窗口套窗口 + 消息转发"的设计都要先考虑**重入**与**忙循环**；
 - 这类问题一旦出现，用户侧表现为"程序卡住"，优先**回滚并保留旧版可运行状态**，再换方案。
 
+### 20. 分层窗口里放不了原生输入框 ⚠️ 踩过（绕了两圈）
+
+现象：搜索框**能收到按键、`g_query` 也在变，但屏幕上不显示任何字符**；自己画文字后又发现光标、选区、`Ctrl+A` 全得手写，越写越怪（例如全选高亮不消失）。
+
+原因：`UpdateLayeredWindow`（逐像素 alpha）的窗口**不会合成它的子窗口**。`EDIT` 控件其实一直活在正确位置、正常工作，只是**画不出来**。
+
+**错误的方向**（别走）：把输入内容、光标、选区高亮全部自己画。看起来能用，但会持续踩：
+
+- `Ctrl+A` 高亮状态要自己维护，文本一变就得清；
+- 选区只有"全选"一种，拖选/双击/Home/End 全失效；
+- 中文输入法的候选窗、组合串要自己接。
+
+**正确的做法**：把原生 `EDIT` 放进一个**独立的小弹出窗口**，只盖住输入框那一块：
+
+```cpp
+// 宿主：普通弹出窗口（不要 WS_EX_LAYERED），背景色 = 输入框底色
+g_editHost = CreateWindowExW(WS_EX_TOOLWINDOW, L"CavalryShortCutEditHost", L"",
+                             WS_POPUP | WS_CLIPCHILDREN, ...);
+// 子控件：真正的原生编辑框
+g_edit = CreateWindowExW(0, L"EDIT", L"",
+                         WS_CHILD | WS_VISIBLE | ES_LEFT | ES_AUTOHSCROLL,
+                         0, 0, 10, 10, g_editHost, (HMENU)ID_EDIT, inst, nullptr);
+// 空状态提示
+SendMessageW(g_edit, EM_SETCUEBANNER /*0x1501*/, TRUE, (LPARAM)L"输入以搜索…");
+```
+
+定位时用**主窗口屏幕坐标**换算（否则又会踩 §17/§18 的坐标坑）：
+
+```cpp
+RECT wr; GetWindowRect(g_main, &wr);
+SetWindowPos(g_editHost, HWND_TOP,
+             wr.left + kPadX + ir.left + 8,
+             wr.top  + kPadY + ir.top  + 6, ew, eh, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+```
+
+离开搜索模式时 `ShowWindow(g_editHost, SW_HIDE)`。
+
+**收益**：光标闪烁、`Ctrl+A`、拖选、双击选词、`Home/End`、输入法候选、右键菜单**全部回归系统行为**，代码反而变少。
+
+**教训**：
+1. 分层窗口（`UpdateLayeredWindow`）**不支持子窗口显示**，需要原生控件时用"独立弹出窗口 + 控件"；
+2. 不要用自绘去仿真系统控件的行为，仿真成本高且永远缺一半；
+3. 判断"输入没生效"要先分清是**没收到**还是**没显示**（加一句日志看 `g_query` 就知道）。
+
 ---
 
 ## 七、30 秒排查清单（按顺序）
