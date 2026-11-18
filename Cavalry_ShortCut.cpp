@@ -124,6 +124,7 @@ static bool g_imeOn = true;   // 输入框是否启用输入法（Cavalry_ShortC
 static bool g_dragging = false;
 static bool g_selAll = false;
 static void SyncEditText();
+static void UpdateResults();
 static POINT g_dragOffset = {0, 0};
 
 static std::vector<Item> g_results;
@@ -133,6 +134,7 @@ static int g_tab = 0;
 static const wchar_t* kTabs[] = { L"全部", L"脚本", L"形状", L"行为", L"工具", L"效果", L"操作" };
 static const int kTabCount = 7;
 static HWND g_edit = nullptr;
+static HWND g_editHost = nullptr;
 static HWND g_scrollbar = nullptr;
 static int g_scroll = 0;
 static int g_hoverRow = -1;
@@ -661,14 +663,45 @@ static LRESULT CALLBACK EditSubclass(HWND h, UINT m, WPARAM w, LPARAM l, UINT_PT
     return DefSubclassProc(h, m, w, l);
 }
 
+static LRESULT CALLBACK EditHostProc(HWND h, UINT m, WPARAM w, LPARAM l) {
+    if (m == WM_CTLCOLOREDIT) {
+        SetTextColor((HDC)w, RGB(235, 235, 240));
+        SetBkColor((HDC)w, RGB(22, 22, 24));
+        static HBRUSH br = CreateSolidBrush(RGB(22, 22, 24));
+        return (LRESULT)br;
+    }
+    if (m == WM_COMMAND && LOWORD(w) == ID_EDIT && HIWORD(w) == EN_CHANGE) {
+        wchar_t buf[256] = {0};
+        GetWindowTextW(g_edit, buf, 255);
+        g_query = buf;
+        g_selAll = false;
+        g_sel = 0; g_scroll = 0;
+        UpdateResults();
+        if (g_main) InvalidateRect(g_main, nullptr, FALSE);
+        return 0;
+    }
+    return DefWindowProcW(h, m, w, l);
+}
+
 static void CreateEdit(HWND parent, HINSTANCE inst) {
+    // 原生 EDIT 放独立弹出窗口（主窗口是分层窗口，子窗口不会被绘制）
+    WNDCLASSW hc = {};
+    hc.lpfnWndProc = EditHostProc;
+    hc.hInstance = inst;
+    hc.hbrBackground = CreateSolidBrush(RGB(22, 22, 24));
+    hc.lpszClassName = L"CavalryShortCutEditHost";
+    RegisterClassW(&hc);
+    g_editHost = CreateWindowExW(WS_EX_TOOLWINDOW, L"CavalryShortCutEditHost", L"",
+                                 WS_POPUP | WS_CLIPCHILDREN, 0, 0, 10, 10,
+                                 nullptr, nullptr, inst, nullptr);
     g_edit = CreateWindowExW(0, L"EDIT", L"",
-                             WS_CHILD | ES_LEFT | ES_AUTOHSCROLL,
-                             0, 0, 10, 10, parent, (HMENU)ID_EDIT, inst, nullptr);
+                             WS_CHILD | WS_VISIBLE | ES_LEFT | ES_AUTOHSCROLL,
+                             0, 0, 10, 10, g_editHost, (HMENU)ID_EDIT, inst, nullptr);
     if (!g_edit) return;
-    HFONT f = MakeFont(16);
+    HFONT f = MakeFont(19);
     SendMessageW(g_edit, WM_SETFONT, (WPARAM)f, TRUE);
-    if (!g_imeOn) ImmAssociateContext(g_edit, nullptr);   // ime=off：字母直通，不打拼音
+    SendMessageW(g_edit, 0x1501, TRUE, (LPARAM)L"输入以搜索（Tab / Esc 返回）");
+    if (!g_imeOn) ImmAssociateContext(g_edit, nullptr);
     SetWindowSubclass(g_edit, EditSubclass, 1, 0);
 
     g_scrollbar = CreateWindowExW(0, L"SCROLLBAR", nullptr,
@@ -678,20 +711,24 @@ static void CreateEdit(HWND parent, HINSTANCE inst) {
 
 static RECT InputRect();
 static void SyncEditFromMode() {
-    if (!g_edit) return;
+    if (!g_edit || !g_editHost) return;
     if (g_mode == M_SEARCH) {
         RECT ir = InputRect();
-        SetWindowPos(g_edit, HWND_TOP, kPadX + ir.left + 8, kPadY + ir.top + 6,
-                     ir.right - ir.left - 16, ir.bottom - ir.top - 10, SWP_SHOWWINDOW);
+        RECT wr; GetWindowRect(g_main, &wr);
+        int ew = ir.right - ir.left - 16;
+        int eh = ir.bottom - ir.top - 10;
+        SetWindowPos(g_editHost, HWND_TOP, wr.left + kPadX + ir.left + 8, wr.top + kPadY + ir.top + 6,
+                     ew, eh, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+        SetWindowPos(g_edit, nullptr, 0, 0, ew, eh, SWP_NOMOVE | SWP_NOZORDER | SWP_SHOWWINDOW);
         {
-            RECT pr = { 40, 60, g_winW - 40, g_winH - 60 };   // 与 PanelRect 一致
+            RECT pr = { 40, 60, g_winW - 40, g_winH - 60 };
             SetWindowPos(g_scrollbar, HWND_TOP, kPadX + pr.right - 30, kPadY + pr.top + 110,
                          14, 7 * 38 - 4, SWP_NOZORDER);
             UpdateScrollInfo();
         }
         SetFocus(g_edit);
     } else {
-        ShowWindow(g_edit, SW_HIDE);
+        ShowWindow(g_editHost, SW_HIDE);
         ShowWindow(g_scrollbar, SW_HIDE);
     }
 }
