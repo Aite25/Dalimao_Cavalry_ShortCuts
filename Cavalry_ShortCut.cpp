@@ -2046,14 +2046,8 @@ static void ShowAtCursor(HWND hwnd) {
     POINT c;
     GetCursorPos(&c);
     const int winW = g_winW + kPadX * 2, winH = g_winH + kPadY * 2;
-    // 只把"界面本身"（g_winW × g_winH）挂在光标上；外圈的透明输入区允许超出屏幕
+    // 圆盘：界面中心严格对准光标（盲甩也能选到边缘扇区：扇区矩形允许超出屏幕）
     int cx0 = c.x - g_winW / 2, cy0 = c.y - g_winH / 2;
-    RECT work;
-    SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
-    if (cx0 < work.left) cx0 = work.left;
-    if (cy0 < work.top) cy0 = work.top;
-    if (cx0 + g_winW > work.right) cx0 = work.right - g_winW;
-    if (cy0 + g_winH > work.bottom) cy0 = work.bottom - g_winH;
     int x = cx0 - kPadX, y = cy0 - kPadY;
 
     g_shownTick = GetTickCount();
@@ -2084,6 +2078,17 @@ static void EnterSearch(wchar_t firstChar = 0) {
     g_sel = 0;
     g_scroll = 0;
     g_selAll = false;
+    if (g_main) {   // 搜索面板需要完整可见：把界面拉回工作区
+        RECT work; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+        RECT wr; GetWindowRect(g_main, &wr);
+        int nx = wr.left, ny = wr.top;
+        int px = nx + kPadX, py = ny + kPadY;
+        if (px < work.left) nx += work.left - px;
+        if (py < work.top) ny += work.top - py;
+        if (px + g_winW > work.right) nx -= (px + g_winW - work.right);
+        if (py + g_winH > work.bottom) ny -= (py + g_winH - work.bottom);
+        if (nx != wr.left || ny != wr.top) SetWindowPos(g_main, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+    }
     SyncEditText();
     UpdateResults();
     SyncEditFromMode();
