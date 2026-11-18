@@ -31,6 +31,7 @@ using namespace Gdiplus;
 #include <map>
 #include <algorithm>
 #include <cstdio>
+#include <thread>
 
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "user32.lib")
@@ -554,35 +555,19 @@ static void LoadOps() {
 }
 
 static void RunItem(const Item& it) {
-    if (it.kind == L"script") {
-        RunScriptText(ReadFileUtf8(ExeDir() + L"\\actions\\" + it.value));
-    } else if (it.kind == L"layer") {
-        RunScriptText("(function(){var id=api.create(\"" + Narrow(it.value) + "\"); if(id) api.select([id]);})();");
-    } else if (it.kind == L"ops") {
-        RunScriptText(Narrow(it.value));
-        {
-    HideHotbox(g_main ? g_main : GetActiveWindow());
-            Sleep(60);
-            HWND cav = g_cavalryWnd;
-            if (!cav || !IsWindow(cav)) { HWND fg = GetForegroundWindow(); if (IsCavalryWindow(fg)) cav = fg; }
-            if (cav && IsWindow(cav)) {
-                HWND fgNow = GetForegroundWindow();
-                DWORD fgTid = fgNow ? GetWindowThreadProcessId(fgNow, nullptr) : 0;
-                DWORD cavTid = GetWindowThreadProcessId(cav, nullptr);
-                if (fgTid && cavTid && fgTid != cavTid) AttachThreadInput(fgTid, cavTid, TRUE);
-                BringWindowToTop(cav);
-                SetForegroundWindow(cav);
-                if (fgTid && cavTid && fgTid != cavTid) AttachThreadInput(fgTid, cavTid, FALSE);
-                Sleep(150);
-            }
-            Log(std::string("op send, fg=") + DescribeWindow(GetForegroundWindow()));
-            SendCombo(it.value);
+    HideHotbox(g_main ? g_main : GetActiveWindow());   // 先收起，立刻给反馈
+    Item item = it;
+    std::thread([item]() {
+        if (item.kind == L"script") {
+            RunScriptText(ReadFileUtf8(ExeDir() + L"\\actions\\" + item.value));
+        } else if (item.kind == L"layer") {
+            RunScriptText("(function(){var id=api.create(\"" + Narrow(item.value) + "\"); if(id) api.select([id]);})();");
+        } else if (item.kind == L"ops") {
+            RunScriptText(Narrow(item.value));
+        } else if (item.kind == L"keys") {
+            SendCombo(item.value);
         }
-    }
-    HideHotbox(g_main ? g_main : GetActiveWindow());
-    g_mode = M_PIE;
-    SyncEditFromMode();
-    g_query.clear();
+    }).detach();
 }
 
 static void SyncEditFromMode();
