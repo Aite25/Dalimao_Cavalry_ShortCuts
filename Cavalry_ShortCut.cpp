@@ -1475,8 +1475,20 @@ static bool AnyCavalryVisible() {
 }
 
 static void TickCavalryState(HWND hotbox) {
-    // 不再自动关闭：覆盖其它应用也没关系，用户手动关闭（Esc/右键/再次触发）
-    if (g_msgWndGlobal && !IsWindowVisible(hotbox)) UnregisterHotKey(g_msgWndGlobal, 2);
+    // 只做一件事：热盒被别的窗口挡住时，把空格热键归还；露出来时再收回
+    if (!g_msgWndGlobal) return;
+    static bool spaceOn = false;
+    bool visible = IsWindowVisible(hotbox) != 0;
+    bool covered = true;
+    if (visible) {
+        RECT r; GetWindowRect(hotbox, &r);
+        POINT c = { (r.left + r.right) / 2, (r.top + r.bottom) / 2 };
+        HWND under = WindowFromPoint(c);
+        covered = !(under && (under == hotbox || GetAncestor(under, GA_ROOT) == hotbox));
+    }
+    bool want = visible && !covered;
+    if (want && !spaceOn) { RegisterHotKey(g_msgWndGlobal, 2, MOD_NOREPEAT, VK_SPACE); spaceOn = true; }
+    else if (!want && spaceOn) { UnregisterHotKey(g_msgWndGlobal, 2); spaceOn = false; }
 }
 
 
@@ -1548,7 +1560,6 @@ static void ShowAtCursor(HWND hwnd) {
     SetWindowPos(hwnd, HWND_TOP, x, y, g_winW, g_winH, SWP_SHOWWINDOW | SWP_NOACTIVATE);
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
     ForceForeground(hwnd);
-    if (g_msgWndGlobal) RegisterHotKey(g_msgWndGlobal, 2, MOD_NOREPEAT, VK_SPACE);   // 空格确认（仅热盒显示期间）
     InvalidateRect(hwnd, nullptr, TRUE);
 }
 
