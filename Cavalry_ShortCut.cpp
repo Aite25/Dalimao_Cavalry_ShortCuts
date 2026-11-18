@@ -1754,7 +1754,7 @@ static std::string DescribeWindow(HWND h) {
 static int g_focusRetry = 0;   // 显示后短暂抢焦点重试
 static DWORD g_shownTick = 0;
 static bool g_forceShow = false;   // 仅调试用：--show-force 时即使 Cavalry 没开也显示
-static DWORD g_lastWarm = 0;
+static bool g_warmedOnce = false;   // 只在第一次呼出时预热一次
 
 
 static bool AnyCavalryVisible() {
@@ -1836,6 +1836,11 @@ static void HideHotbox(HWND hwnd) {
 }
 
 static void ShowAtCursor(HWND hwnd) {
+    if (!g_warmedOnce) {   // 第一次呼出：后台发一次真实 API 调用，把 Cavalry 的 JS 上下文热起来
+        g_warmedOnce = true;
+        std::thread([]() { EnsurePreamble(); std::string o; DWORD st = 0;
+            HttpCall(L"POST", L"/call", "{\"name\":\"execute_script\",\"args\":{\"script\":\"api.getFrame();\"}}", o, st); }).detach();
+    }
     if (!g_forceShow && !AnyCavalryVisible()) { Log("show skipped: cavalry not running"); return; }
     bool cavFrontAtShow = IsCavalryWindow(GetForegroundWindow());   // 只有从 Cavalry 触发才抢焦点
     if (IsWindowVisible(hwnd)) ShowWindow(hwnd, SW_HIDE);   // 先藏起来，避免旧画面（搜索面板）闪一下
