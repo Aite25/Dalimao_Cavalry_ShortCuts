@@ -1614,7 +1614,7 @@ static void TickCavalryState(HWND hotbox) {
         HWND under = WindowFromPoint(c);
         covered = !(under && (under == hotbox || GetAncestor(under, GA_ROOT) == hotbox));
     }
-    bool want = visible && !covered;
+    bool want = visible && !covered && (GetForegroundWindow() == hotbox);
     if (want && !spaceOn) { RegisterHotKey(g_msgWndGlobal, 2, MOD_NOREPEAT, VK_SPACE); spaceOn = true; }
     else if (!want && spaceOn) { UnregisterHotKey(g_msgWndGlobal, 2); spaceOn = false; }
 }
@@ -1675,6 +1675,7 @@ static void HideHotbox(HWND hwnd) {
 }
 
 static void ShowAtCursor(HWND hwnd) {
+    bool cavFrontAtShow = IsCavalryWindow(GetForegroundWindow());   // 只有从 Cavalry 触发才抢焦点
     if (IsWindowVisible(hwnd)) ShowWindow(hwnd, SW_HIDE);   // 先藏起来，避免旧画面（搜索面板）闪一下
     g_mode = M_PIE;
     { HWND fg0 = GetForegroundWindow(); if (fg0 && IsCavalryWindow(fg0)) g_cavalryWnd = fg0; }
@@ -1699,19 +1700,19 @@ static void ShowAtCursor(HWND hwnd) {
     if (y + g_winH > work.bottom) y = work.bottom - g_winH;
 
     g_shownTick = GetTickCount();
-    g_focusRetry = 60;   // 约 300ms 内持续确保焦点在热盒
+    g_focusRetry = cavFrontAtShow ? 60 : 0;
     // 先短暂置顶再取消：确保能盖住当前前台窗口，但之后仍可被其它窗口覆盖
 { HDC dc0 = GetDC(hwnd); RECT rc0 = { 0, 0, g_winW, g_winH }; HBRUSH b0 = CreateSolidBrush(RGB(0,0,0)); FillRect(dc0, &rc0, b0); DeleteObject(b0); ReleaseDC(hwnd, dc0); }
     InvalidateRect(hwnd, nullptr, TRUE);
     UpdateWindow(hwnd);   // 先按"圆盘"画好，再显示
     SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 1, LWA_COLORKEY | LWA_ALPHA);   // 先几乎透明，避免首帧残影
-    SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, SWP_SHOWWINDOW);   // 激活窗口，保证键盘事件进来
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, cavFrontAtShow ? SWP_SHOWWINDOW : (SWP_SHOWWINDOW | SWP_NOACTIVATE));
     SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, g_winW, g_winH, 0);
     InvalidateRect(hwnd, nullptr, TRUE);
     UpdateWindow(hwnd);   // 显示后立刻补画一帧，抵消首帧残影
     SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);   // 画好后再恢复不透明
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
-    ForceForeground(hwnd);
+    if (cavFrontAtShow) ForceForeground(hwnd);   // 非 Cavalry 触发：不抢焦点
     if (g_edit) ShowWindow(g_edit, SW_HIDE);
     RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
     InvalidateRect(hwnd, nullptr, TRUE);
