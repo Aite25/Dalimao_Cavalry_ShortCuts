@@ -1,7 +1,7 @@
 {
   "sets": [
     [
-      {"name":"出点=当前帧（裁剪尾部）", "kind":"ops", "value":"op:9", "key":"W"},
+      {"name":"入点=当前帧（裁剪头部）", "kind":"ops", "value":"op:8", "key":"W"},
       {"name":"Math", "kind":"script", "value":"Math.js", "key":"E"},
       {"name":"整体移动：出点对齐播放头（Move Out）", "kind":"ops", "value":"op:3", "key":"D"},
       {"name":"", "kind":"script", "value":"", "key":"C"},

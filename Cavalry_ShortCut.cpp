@@ -1484,9 +1484,27 @@ static RECT SetHotkeyRect() {
     return r;
 }
 
+static RECT SetTabRect(int i) {   // 设置页里的分类页签
+    RECT p = PanelRect();
+    RECT r;
+    r.left = p.left + 480 + i * 54;
+    r.right = r.left + 52;
+    r.top = p.top + 108;
+    r.bottom = r.top + 24;
+    return r;
+}
+
+static int SetTabPosFromPoint(POINT pt) {
+    for (int i = 0; i < kTabCount; ++i) {
+        RECT r = SetTabRect(i);
+        if (pt.x >= r.left && pt.x < r.right && pt.y >= r.top && pt.y < r.bottom) return i;
+    }
+    return -1;
+}
+
 static RECT SetInputRect() {
     RECT p = PanelRect();
-    RECT r = { p.left + 480, p.top + 112, p.right - 16, p.top + 144 };
+    RECT r = { p.left + 480, p.top + 136, p.right - 16, p.top + 166 };
     return r;
 }
 
@@ -1495,7 +1513,7 @@ static RECT SetResultRect(int row) {
     RECT r;
     r.left = p.left + 480;
     r.right = p.right - 16;
-    r.top = p.top + 152 + row * 28;
+    r.top = p.top + 174 + row * 26;
     r.bottom = r.top + 28;
     return r;
 }
@@ -1581,6 +1599,20 @@ static void DrawSettings(HDC dc) {
         RECT ir = SetInputRect();
         FillRound(dc, ir, 8, RGB(22, 22, 24), RGB(80, 80, 84));
 
+        {   // 分类页签
+            HFONT ftt = MakeFont(13);
+            for (int ti = 0; ti < kTabCount; ++ti) {
+                RECT tr = SetTabRect(ti);
+                bool on = (g_tabOrder[ti] == g_tab);
+                if (on) FillRound(dc, tr, 5, RGB(50, 52, 58), RGB(60, 62, 70));
+                HGDIOBJ o9 = SelectObject(dc, ftt);
+                SetBkMode(dc, TRANSPARENT);
+                SetTextColor(dc, on ? RGB(240, 244, 250) : RGB(150, 152, 160));
+                DrawTextW(dc, kTabs[g_tabOrder[ti]], -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                SelectObject(dc, o9);
+            }
+            DeleteObject(ftt);
+        }
         // 结果
         int rows = (p.bottom - 40 - SetResultRect(0).top) / 28;
         if (rows > 12) rows = 12;
@@ -1593,10 +1625,13 @@ static void DrawSettings(HDC dc) {
             of = SelectObject(dc, fr);
             SetBkMode(dc, TRANSPARENT);
             SetTextColor(dc, RGB(225, 228, 235));
-            RECT tr = r; tr.left += 10; tr.right -= 80;
+            RECT ibx = { r.left + 6, r.top + 5, r.left + 22, r.top + 21 };
+            if (g_results[idx].kind == L"layer") DrawIcon(dc, g_results[idx].value, ibx);
+            RECT tr = r; tr.left += 26; tr.right -= 96;
             DrawTextW(dc, g_results[idx].name.c_str(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
             SetTextColor(dc, RGB(140, 144, 152));
             RECT tg = r; tg.left = r.right - 76; tg.right -= 8;
+            if ((g_results[idx].kind == L"ops" && !g_results[idx].key.empty())) DrawKeyCap(dc, g_results[idx].key, r.right - 84, r);
             std::wstring tagv = (g_results[idx].kind == L"script") ? L"脚本" : ((g_results[idx].kind == L"keys" || g_results[idx].kind == L"ops") ? L"操作" : L"图层");
             DrawTextW(dc, tagv.c_str(), -1, &tg, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
             SelectObject(dc, of);
@@ -2090,6 +2125,7 @@ static std::string DescribeWindow(HWND h) {
 static int g_focusRetry = 0;   // 显示后短暂抢焦点重试
 static DWORD g_shownTick = 0;
 static bool g_forceShow = false;   // 仅调试用：--show-force 时即使 Cavalry 没开也显示
+static bool g_startSettings = false;   // 调试：--settings 直接进设置页
 static bool g_spaceReg = false;   // 空格热键是否已注册
 static bool g_warmedOnce = false;   // 只在第一次呼出时预热一次
 
@@ -2247,7 +2283,8 @@ static void ShowAtCursor(HWND hwnd) {
     UpdateWindow(hwnd);   // 显示后立刻补画一帧，抵消首帧残影
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
     if (cavFrontAtShow) ForceForeground(hwnd);   // 非 Cavalry 触发：不抢焦点
-    if (g_edit) ShowWindow(g_edit, SW_HIDE);
+    if (g_startSettings) { g_startSettings = false; EnterSettingsMode(hwnd); }
+    if (g_edit && g_mode != M_SETTINGS) ShowWindow(g_edit, SW_HIDE);
     RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
     InvalidateRect(hwnd, nullptr, TRUE);
 }
@@ -2663,18 +2700,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
         } else if (g_mode == M_SETTINGS) {
-            {   // 右侧选项行
-                POINT op0 = { p.x, p.y };
-                for (int oi = 0; oi < 2; ++oi) {
-                    RECT orr = SettingOptRect(oi);
-                    if (op0.x >= orr.left && op0.x < orr.right && op0.y >= orr.top && op0.y < orr.bottom) {
-                        if (oi == 0) { g_captureHotkey = true; }
-                        else { for (int q = 0; q < kTabCount; ++q) g_tabOrder[q] = q; SaveIni(); }
-                        InvalidateRect(hwnd, nullptr, TRUE);
-                        return 0;
-                    }
-                }
-            }
             {   // 页签点击（与圆盘一致）
                 POINT tp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
                 for (int i = 0; i < 4; ++i) {
@@ -2713,6 +2738,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     InvalidateRect(hwnd, nullptr, TRUE);
                     return 0;
                 }
+            }
+            {   // 分类页签点击
+                int tp = SetTabPosFromPoint(p);
+                if (tp >= 0) { g_tab = g_tabOrder[tp]; g_selSearch = 0; g_scroll = 0; UpdateResults(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
             }
             for (int i = 0; i < 8; ++i) {   // 左侧环状热盒：点击选中
                 RECT rr0 = SetRingRect(i);
@@ -3013,6 +3042,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     bool showOnStart = (cmdLine && wcsstr(cmdLine, L"--show") != 0);
     if (cmdLine && wcsstr(cmdLine, L"--show-force")) g_forceShow = true;
+    if (cmdLine && wcsstr(cmdLine, L"--settings")) g_startSettings = true;
     {   // 单实例：已有实例则退出（避免多份窗口抢热键）
         HANDLE mtx = CreateMutexW(nullptr, TRUE, L"CavalryShortCut_Single");
         if (mtx && GetLastError() == ERROR_ALREADY_EXISTS) {
