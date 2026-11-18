@@ -1465,6 +1465,7 @@ static std::string DescribeWindow(HWND h) {
     std::string out = Narrow(cls) + "/" + std::to_string(pid);
     return out;
 }
+static DWORD g_shownTick = 0;
 static HWND g_cavalryWnd = nullptr;   // 呼出热盒时 Cavalry 的前台窗口
 
 static bool AnyCavalryVisible() {
@@ -1481,7 +1482,8 @@ static void TickCavalryState(HWND hotbox) {
     else if (g_cavalryWnd && (IsIconic(g_cavalryWnd) || !IsWindowVisible(g_cavalryWnd))) hideNow = true;
 
     // 只允许覆盖在 Cavalry 上：前台不是 Cavalry 也不是热盒自己 -> 收起
-    if (!hideNow && IsWindowVisible(hotbox)) {
+    bool grace = (GetTickCount() - g_shownTick) < 1200;
+    if (!hideNow && !grace && IsWindowVisible(hotbox)) {
         HWND fg = GetForegroundWindow();
         bool mine = (fg == hotbox) || (g_main && fg == g_main) || (g_edit && fg == g_edit);
         if (!mine && !IsCavalryWindow(fg)) hideNow = true;
@@ -1562,6 +1564,7 @@ static void ShowAtCursor(HWND hwnd) {
     if (x + g_winW > work.right) x = work.right - g_winW;
     if (y + g_winH > work.bottom) y = work.bottom - g_winH;
 
+    g_shownTick = GetTickCount();
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, SWP_SHOWWINDOW | SWP_NOACTIVATE);
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
     ForceForeground(hwnd);
