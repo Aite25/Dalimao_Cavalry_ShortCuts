@@ -1330,7 +1330,19 @@ static void DrawSettings(HDC dc) {
     SelectObject(dc, opf);
     DeleteObject(fp);
 
-    // 右侧：绑定列表
+    {   // 顶部：当前组提示
+        RECT p = PanelRect();
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, RGB(170, 175, 185));
+        HFONT f2 = MakeFont(13);
+        HGDIOBJ o2 = SelectObject(dc, f2);
+        const wchar_t* mods2[4] = { L"无", L"Ctrl", L"Shift", L"Alt" };
+        std::wstring gt = L"热盒 " + std::to_wstring(g_box + 1) + L" · " + mods2[g_mod] + L"     Ctrl+1~4 切热盒 · Ctrl/Shift/Alt 切版本";
+        RECT gr = { p.left + 16, p.top + 44, p.right - 16, p.top + 68 };
+        DrawTextW(dc, gt.c_str(), -1, &gr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(dc, o2);
+        DeleteObject(f2);
+    }
     static const wchar_t* dirs[8] = { L"N", L"NE", L"E", L"SE", L"S", L"SW", L"W", L"NW" };
     for (int i = 0; i < 8; ++i) {
         RECT r = SettingRowRect(i);
@@ -1443,7 +1455,7 @@ static void Paint(HWND hwnd) {
     FillRect(mem, &bg, bb);
     DeleteObject(bb);
 
-    if (g_mode == M_PIE) {
+        if (g_mode == M_PIE) {
         DrawPie(mem);
     } else if (g_mode == M_SEARCH) {
         std::wstring title = (g_bindSlot >= 0)
@@ -2331,10 +2343,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (g_edit) { SetFocus(g_edit); SendMessageW(g_edit, EM_SETSEL, (WPARAM)0, (LPARAM)-1); }
             return 0;   // 吞掉，避免系统提示音
         }
-        if (g_mode == M_PIE) {
-            if ((GetKeyState(VK_CONTROL) & 0x8000) && wp >= '1' && wp <= '4') { g_ctrlUsed = true; SwitchSet(wp - '1', g_mod); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+        if (g_mode == M_PIE || g_mode == M_SETTINGS) {
+            if ((GetKeyState(VK_CONTROL) & 0x8000) && wp >= '1' && wp <= '4') { g_ctrlUsed = true; if (g_mode == M_SETTINGS) SaveActive(); SwitchSet(wp - '1', g_mod); if (g_mode == M_SETTINGS) { LoadActive(); g_sel = 0; } InvalidateRect(hwnd, nullptr, TRUE); return 0; }
             if (wp == VK_CONTROL) { g_ctrlUsed = false; return 0; }   // Ctrl：等松开时再判断是否单独按
-            if (wp == VK_SHIFT)   { SwitchSet(g_box, (g_mod == 2) ? 0 : 2); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            if (wp == VK_SHIFT)   { if (g_mode == M_SETTINGS) SaveActive(); SwitchSet(g_box, (g_mod == 2) ? 0 : 2); if (g_mode == M_SETTINGS) { LoadActive(); g_sel = 0; } InvalidateRect(hwnd, nullptr, TRUE); return 0; }
             if (wp == VK_MENU)    { SwitchSet(g_box, (g_mod == 3) ? 0 : 3); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         }
         if (wp == VK_ESCAPE) {
