@@ -2730,9 +2730,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
             {   // 右上角 × ：关闭设置页
-                RECT xr = IconRect(0);
-                if (p.x >= xr.left - 6 && p.x < xr.right + 6 && p.y >= xr.top - 6 && p.y < xr.bottom + 6) {
+                RECT xr2 = IconRect(0);
+                InflateRect(&xr2, 14, 14);   // 放大判定框，好点中
+                if (p.x >= xr2.left && p.x < xr2.right && p.y >= xr2.top && p.y < xr2.bottom) {
+                    ExitSettingsMode(hwnd);
                     g_mode = M_PIE;
+                    SyncEditFromMode();
                     InvalidateRect(hwnd, nullptr, TRUE);
                     return 0;
                 }
