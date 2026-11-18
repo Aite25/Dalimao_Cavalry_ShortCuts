@@ -61,10 +61,10 @@ static const COLORREF kText         = RGB(255, 255, 255);
 static const COLORREF kTextDim      = RGB(200, 200, 200);
 static const COLORREF kCenterFill   = RGB(38, 38, 38);
 static const COLORREF kCenterBorder = RGB(31, 31, 31);
-static const COLORREF kArcColor     = RGB(56, 119, 181);
+static const COLORREF kArcColor     = RGB(56, 181, 119);
 static const COLORREF kPanelFill    = RGB(30, 30, 32);
 static const COLORREF kPanelBorder  = RGB(70, 70, 74);
-static const COLORREF kRowSel       = RGB(56, 119, 181);
+static const COLORREF kRowSel       = RGB(44, 132, 88);
 
 static const int kCenterR  = 28;
 static const int kRectW    = 150;
@@ -1245,7 +1245,7 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
             SIZE sz0 = {0, 0};
             GetTextExtentPoint32W(dc, input.c_str(), (int)input.size(), &sz0);
             RECT hr0 = { irc.left - 2, ir.top + 6, irc.left + sz0.cx + 3, ir.bottom - 6 };
-            HBRUSH hb0 = CreateSolidBrush(RGB(48, 92, 160));
+            HBRUSH hb0 = CreateSolidBrush(RGB(48, 160, 92));
             FillRect(dc, &hr0, hb0);
             DeleteObject(hb0);
         }
@@ -1335,7 +1335,7 @@ static void DrawResults(HDC dc) {
         bool hov = (i == g_hoverRow);
         // 普通行填面板色（看起来"无块"），hover 蓝、选中灰；再画 1px 描边
         {
-            COLORREF fillc = hov ? RGB(58, 110, 168) : (sel ? RGB(70, 70, 74) : kPanelFill);
+            COLORREF fillc = hov ? RGB(46, 120, 84) : (sel ? RGB(70, 70, 74) : kPanelFill);
             HBRUSH fb = CreateSolidBrush(fillc);
             FillRect(dc, &fr, fb);
             DeleteObject(fb);
@@ -1548,8 +1548,8 @@ static void DrawSettings(HDC dc) {
         for (int i = 0; i < 8; ++i) {
             RECT r = SetRingRect(i);
             bool sel = (i == g_sel);
-            COLORREF fillc = sel ? RGB(58, 92, 150) : RGB(42, 42, 46);
-            COLORREF bordc = sel ? RGB(96, 150, 220) : RGB(64, 64, 70);
+            COLORREF fillc = sel ? RGB(44, 108, 72) : RGB(42, 42, 46);
+            COLORREF bordc = sel ? RGB(70, 150, 110) : RGB(64, 64, 70);
             FillRound(dc, r, 6, fillc, bordc);
             HGDIOBJ of = SelectObject(dc, f);
             SetBkMode(dc, TRANSPARENT);
@@ -1584,7 +1584,7 @@ static void DrawSettings(HDC dc) {
         static const wchar_t* dnames[8] = { L"N", L"NE", L"E", L"SE", L"S", L"SW", L"W", L"NW" };
         std::wstring kl = std::wstring(L"扇区快捷键（") + dnames[g_sel] + L"）";
         DrawTextW(dc, kl.c_str(), -1, &lt, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-        SetTextColor(dc, g_captureHotkey ? RGB(120, 200, 255) : RGB(255, 210, 120));
+        SetTextColor(dc, g_captureHotkey ? RGB(120, 255, 200) : RGB(255, 210, 120));
         std::wstring hv = g_captureHotkey ? std::wstring(L"按下按键…") : (g_slots[g_sel].key.empty() ? std::wstring(L"未设置") : g_slots[g_sel].key);
         RECT vt = hk; vt.left = hk.right - 150; vt.right -= 10;
         DrawTextW(dc, hv.c_str(), -1, &vt, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
@@ -1628,7 +1628,7 @@ static void DrawSettings(HDC dc) {
             int idx = g_scroll + row;
             if (idx >= (int)g_results.size()) break;
             RECT r = SetResultRect(row);
-            if (idx == g_selSearch) { FillRound(dc, r, 5, RGB(52, 84, 136), RGB(70, 110, 170)); }
+            if (idx == g_selSearch) { FillRound(dc, r, 5, RGB(40, 100, 68), RGB(54, 122, 88)); }
             of = SelectObject(dc, fr);
             SetBkMode(dc, TRANSPARENT);
             SetTextColor(dc, RGB(225, 228, 235));
@@ -1668,7 +1668,7 @@ static void DrawSettings(HDC dc) {
         RECT okB = { p.right - 16 - bw, p.bottom - 16 - bh, p.right - 16, p.bottom - 16 };
         RECT caB = { okB.left - gap - bw, okB.top, okB.left - gap, okB.bottom };
         FillRound(dc, caB, 5, RGB(48, 48, 52), RGB(70, 70, 78));
-        FillRound(dc, okB, 5, RGB(58, 110, 168), RGB(70, 120, 180));
+        FillRound(dc, okB, 5, RGB(46, 120, 84), RGB(56, 132, 96));
         HFONT bf = MakeFont(13);
         HGDIOBJ bo = SelectObject(dc, bf);
         SetBkMode(dc, TRANSPARENT);
@@ -2455,6 +2455,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_mode == M_SEARCH || g_mode == M_SETTINGS) SyncEditFromMode();   // 拖动结束恢复输入框
         g_dragging = false;
         ReleaseCapture();
+        return 0;
+    case WM_SHOWWINDOW:
+        if (!wp) {   // 主窗口一隐藏，原生输入框小窗必须同步隐藏，否则会留在屏幕上
+            if (g_editHost) ShowWindow(g_editHost, SW_HIDE);
+            if (g_scrollbar) ShowWindow(g_scrollbar, SW_HIDE);
+        }
         return 0;
     case WM_ACTIVATE:
         return 0;   // 切窗口不再关闭面板，方便观察状态
