@@ -700,7 +700,6 @@ static void CreateEdit(HWND parent, HINSTANCE inst) {
     if (!g_edit) return;
     HFONT f = MakeFont(19);
     SendMessageW(g_edit, WM_SETFONT, (WPARAM)f, TRUE);
-    SendMessageW(g_edit, 0x1501, TRUE, (LPARAM)L"输入以搜索（Tab / Esc 返回）");
     if (!g_imeOn) ImmAssociateContext(g_edit, nullptr);
     SetWindowSubclass(g_edit, EditSubclass, 1, 0);
 
