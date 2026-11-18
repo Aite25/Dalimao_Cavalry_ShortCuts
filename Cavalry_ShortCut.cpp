@@ -532,7 +532,7 @@ static void LoadOps() {
     struct Op { const wchar_t* name; const wchar_t* hint; const wchar_t* js; };
     static const Op ops[] = {
         { L"设入点（设为当前帧）", L"[",
-          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){var oldIn=api.getInFrame(sel[i]);api.setInFrame(sel[i],f);if(oldIn!==f){api.offsetLayerTime(sel[i],(f-oldIn));}}return \"setIn \"+sel.length;})();" },
+          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){var oldIn=api.getInFrame(sel[i]);if(oldIn!==f){api.offsetLayerTime(sel[i],(f-oldIn));}api.setInFrame(sel[i],f);}return \"setIn \"+sel.length;})();" },
         { L"设出点（设为当前帧）", L"]",
           L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setOutFrame(sel[i],f);}return \"setOut \"+sel.length;})();" },
         { L"入点=当前帧（裁剪头部）", L"Alt+[",
