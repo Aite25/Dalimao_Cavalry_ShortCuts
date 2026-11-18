@@ -1339,7 +1339,10 @@ static void LoadConfig() {
         if (line.rfind("hotkey=", 0) == 0) {
             std::wstring spec = Trim(Widen(line.substr(7)));
             UINT mods = 0, vk = 0;
-            if (ParseHotkey(spec, mods, vk)) {
+            std::wstring lowSpec = ToLower(spec);
+            if (lowSpec == L"off" || lowSpec == L"none" || spec.empty()) {
+                g_hotkeySpec = L"off"; g_hotkeyMods = 0; g_hotkeyVk = 0;
+            } else if (ParseHotkey(spec, mods, vk)) {
                 g_hotkeySpec = spec; g_hotkeyMods = mods; g_hotkeyVk = vk;
             }
             return;
@@ -1601,6 +1604,19 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             // 保持常驻注册；是否响应在 WM_HOTKEY 里按前台判断
         }
         TickCavalryState(hwnd);
+        {   // 触发器：Cavalry 脚本写文件 -> 呼出热盒（替代全局热键）
+            static wchar_t trig[MAX_PATH] = {0};
+            if (!trig[0]) {
+                wchar_t* env = nullptr; size_t len = 0;
+                _wdupenv_s(&env, &len, L"TEMP");
+                if (env) { wcscpy_s(trig, env); wcscat_s(trig, L"\\CavalryShortCut.show"); free(env); }
+            }
+            if (trig[0] && GetFileAttributesW(trig) != INVALID_FILE_ATTRIBUTES) {
+                DeleteFileW(trig);
+                if (!IsWindowVisible(hwnd) || g_mode != M_PIE) ShowAtCursor(hwnd);
+                InvalidateRect(hwnd, nullptr, TRUE);
+            }
+        }
         if (IsWindowVisible(hwnd) && g_mode == M_PIE) {
             if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) { ShowWindow(hwnd, SW_HIDE); return 0; }   // 右键取消
             POINT cp; GetCursorPos(&cp);
@@ -2108,6 +2124,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 // ---------------------------------------------------------------- 入口
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
+    bool showOnStart = (cmdLine && wcsstr(cmdLine, L"--show") != 0);
     {   // 单实例：已有实例则退出（避免多份窗口抢热键）
         HANDLE mtx = CreateMutexW(nullptr, TRUE, L"CavalryShortCut_Single");
         if (mtx && GetLastError() == ERROR_ALREADY_EXISTS) {
@@ -2163,10 +2180,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     HWND msgWnd = CreateWindowExW(0, L"CavalryShortCut", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, inst, nullptr);
     g_msgWndGlobal = msgWnd;
     BOOL hk = TRUE;   // 热键改为按需注册（仅 Cavalry 前台）
-    SetHotkeyEnabled(true);   // 启动即注册，避免按需注册的时序问题
+    if (g_hotkeyVk != 0) SetHotkeyEnabled(true);   // hotkey=off 时不注册（脚本呼出）
     Log("hotkey " + Narrow(g_hotkeySpec) + " -> " + (hk ? "ok" : ("FAIL err=" + std::to_string(GetLastError()))));
 
     SetTimer(hwnd, 1, 5, nullptr);   // 5ms
+    if (showOnStart) PostMessageW(hwnd, WM_APP + 1, 0, 0);
 
     WNDCLASSW cc = {};
     cc.lpfnWndProc = CatcherProc;
