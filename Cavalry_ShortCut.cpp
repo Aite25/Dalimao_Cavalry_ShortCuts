@@ -1683,7 +1683,9 @@ static void ShowAtCursor(HWND hwnd) {
     if (y + g_winH > work.bottom) y = work.bottom - g_winH;
 
     g_shownTick = GetTickCount();
-    SetWindowPos(hwnd, HWND_TOP, x, y, g_winW, g_winH, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+    // 先短暂置顶再取消：确保能盖住当前前台窗口，但之后仍可被其它窗口覆盖
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+    SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, g_winW, g_winH, SWP_NOACTIVATE);
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
     ForceForeground(hwnd);
     InvalidateRect(hwnd, nullptr, TRUE);
