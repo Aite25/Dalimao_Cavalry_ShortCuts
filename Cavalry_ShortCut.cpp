@@ -1478,19 +1478,21 @@ static void TickCavalryState(HWND hotbox) {
     if (!g_cavalryWnd || !IsWindow(g_cavalryWnd)) g_cavalryWnd = nullptr;
     bool alive = g_cavalryWnd ? true : AnyCavalryVisible();
     bool hideNow = false;
-    if (!alive) hideNow = true;
-    else if (g_cavalryWnd && (IsIconic(g_cavalryWnd) || !IsWindowVisible(g_cavalryWnd))) hideNow = true;
+    const char* why = "";
+    if (!alive) { hideNow = true; why = "notalive"; }
+    else if (g_cavalryWnd && (IsIconic(g_cavalryWnd) || !IsWindowVisible(g_cavalryWnd))) { hideNow = true; why = "iconic"; }
 
-    // 只允许覆盖在 Cavalry 上：前台不是 Cavalry 也不是热盒自己 -> 收起
+    static int awayTicks = 0;
     bool grace = (GetTickCount() - g_shownTick) < 1200;
     if (!hideNow && !grace && IsWindowVisible(hotbox)) {
         HWND fg = GetForegroundWindow();
         bool mine = (fg == hotbox) || (g_main && fg == g_main) || (g_edit && fg == g_edit);
-        if (!mine && !IsCavalryWindow(fg)) hideNow = true;
+        if (fg && !mine && !IsCavalryWindow(fg)) awayTicks++; else awayTicks = 0;
+        if (awayTicks > 20) { hideNow = true; why = "fg-not-cavalry"; }   // 连续 100ms 不在 Cavalry 才收起（忽略瞬间 null）
     }
 
     if (hideNow && IsWindowVisible(hotbox)) {
-        Log(std::string("tick hide: fg=") + DescribeWindow(GetForegroundWindow()) + " alive=" + (alive ? "1" : "0"));
+        Log(std::string("tick hide reason=") + why + " fg=" + DescribeWindow(GetForegroundWindow()) + " grace=" + (grace ? "1" : "0"));
         g_binding = false;
         g_mode = M_PIE;
         g_hover = -1;
@@ -2193,7 +2195,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     RegisterClassW(&wc);
 
-    HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_LAYERED,
+    HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TOPMOST,
                                 L"CavalryShortCut", L"Cavalry ShortCut", WS_POPUP | WS_CLIPCHILDREN,
                                 0, 0, g_winW, g_winH, nullptr, nullptr, inst, nullptr);
     g_main = hwnd;
