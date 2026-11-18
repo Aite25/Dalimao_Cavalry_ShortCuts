@@ -987,8 +987,24 @@ static void DrawPie(HDC dc) {
             SetTextColor(dc, RGB(90, 90, 90));
             DrawTextW(dc, L"—", -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         } else {
+            {   // 图标（图层类显示 Add Layers 同款图标）
+                int cy0 = (r.top + r.bottom) / 2;
+                RECT ib = { r.left + 8, cy0 - 8, r.left + 24, cy0 + 8 };
+                if (g_slots[i].kind == L"layer") DrawIcon(dc, g_slots[i].value, ib);
+                else if (g_slots[i].used) {
+                    HFONT gf = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                                            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                            DEFAULT_PITCH | FF_DONTCARE, L"Segoe MDL2 Assets");
+                    HGDIOBJ go2 = SelectObject(dc, gf);
+                    SetTextColor(dc, RGB(150, 155, 165));
+                    const wchar_t* glyph = (g_slots[i].kind == L"ops") ? L"\uE8EF" : L"\uE943";
+                    DrawTextW(dc, glyph, -1, &ib, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
+                    SelectObject(dc, go2);
+                    DeleteObject(gf);
+                }
+            }
             SetTextColor(dc, kText);
-            RECT tr = { r.left + 10, r.top, r.right - 34, r.bottom };
+            RECT tr = { r.left + 28, r.top, r.right - 34, r.bottom };
             DrawTextW(dc, g_slots[i].name.c_str(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOCLIP);
 
             SetTextColor(dc, kTextDim);
@@ -1158,6 +1174,22 @@ static void DrawResults(HDC dc) {
 
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
+            {   // 图标（图层类显示 Add Layers 同款图标）
+                int cy0 = (r.top + r.bottom) / 2;
+                RECT ib = { r.left + 8, cy0 - 8, r.left + 24, cy0 + 8 };
+                if (g_slots[i].kind == L"layer") DrawIcon(dc, g_slots[i].value, ib);
+                else if (g_slots[i].used) {
+                    HFONT gf = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                                            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                            DEFAULT_PITCH | FF_DONTCARE, L"Segoe MDL2 Assets");
+                    HGDIOBJ go2 = SelectObject(dc, gf);
+                    SetTextColor(dc, RGB(150, 155, 165));
+                    const wchar_t* glyph = (g_slots[i].kind == L"ops") ? L"\uE8EF" : L"\uE943";
+                    DrawTextW(dc, glyph, -1, &ib, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
+                    SelectObject(dc, go2);
+                    DeleteObject(gf);
+                }
+            }
         SetTextColor(dc, kText);
         HFONT f = MakeFont(15);
         HGDIOBJ of = SelectObject(dc, f);
@@ -1169,6 +1201,22 @@ static void DrawResults(HDC dc) {
             RECT nr = r; nr.left += 8; nr.right = nr.left + 22;
             std::wstring num = std::to_wstring(row + 1);
             DrawTextW(dc, num.c_str(), -1, &nr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            {   // 图标（图层类显示 Add Layers 同款图标）
+                int cy0 = (r.top + r.bottom) / 2;
+                RECT ib = { r.left + 8, cy0 - 8, r.left + 24, cy0 + 8 };
+                if (g_slots[i].kind == L"layer") DrawIcon(dc, g_slots[i].value, ib);
+                else if (g_slots[i].used) {
+                    HFONT gf = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                                            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                            DEFAULT_PITCH | FF_DONTCARE, L"Segoe MDL2 Assets");
+                    HGDIOBJ go2 = SelectObject(dc, gf);
+                    SetTextColor(dc, RGB(150, 155, 165));
+                    const wchar_t* glyph = (g_slots[i].kind == L"ops") ? L"\uE8EF" : L"\uE943";
+                    DrawTextW(dc, glyph, -1, &ib, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
+                    SelectObject(dc, go2);
+                    DeleteObject(gf);
+                }
+            }
             SetTextColor(dc, kText);
         }
         DrawTextW(dc, g_results[i].name.c_str(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
@@ -1307,12 +1355,28 @@ static void DrawSettings(HDC dc) {
 
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
+            {   // 图标（图层类显示 Add Layers 同款图标）
+                int cy0 = (r.top + r.bottom) / 2;
+                RECT ib = { r.left + 8, cy0 - 8, r.left + 24, cy0 + 8 };
+                if (g_slots[i].kind == L"layer") DrawIcon(dc, g_slots[i].value, ib);
+                else if (g_slots[i].used) {
+                    HFONT gf = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                                            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                            DEFAULT_PITCH | FF_DONTCARE, L"Segoe MDL2 Assets");
+                    HGDIOBJ go2 = SelectObject(dc, gf);
+                    SetTextColor(dc, RGB(150, 155, 165));
+                    const wchar_t* glyph = (g_slots[i].kind == L"ops") ? L"\uE8EF" : L"\uE943";
+                    DrawTextW(dc, glyph, -1, &ib, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
+                    SelectObject(dc, go2);
+                    DeleteObject(gf);
+                }
+            }
         SetTextColor(dc, kText);
         HFONT f = MakeFont(15);
         HGDIOBJ of2 = SelectObject(dc, f);
         std::wstring label = std::wstring(dirs[i]) + L"   " +
                              (g_slots[i].used ? g_slots[i].name : L"（空）");
-        RECT tr2 = r; tr2.left += 12;
+        RECT tr2 = r; tr2.left += (g_slots[i].used && g_slots[i].kind == L"layer") ? 30 : 12;
         DrawTextW(dc, label.c_str(), -1, &tr2, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
         SelectObject(dc, of2);
         DeleteObject(f);
