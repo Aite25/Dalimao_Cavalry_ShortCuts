@@ -101,7 +101,7 @@ static std::vector<std::wstring> g_pinned;   // 置顶项 key = kind + "|" + val
 static std::vector<std::wstring> g_opsJs;   // 操作项的 JS（按 index 引用，避免存进 json 被截断）
 static std::vector<std::wstring> g_opsNames;
 static std::vector<std::wstring> g_opsHints;   // 对应的原生快捷键
-static bool g_opsUseKeys = true;   // ini: opsmode=keys|mcp
+static bool g_opsUseKeys = false;   // 默认走 MCP（Cavalry 不响应模拟按键）
 static std::vector<Item> g_index;      // 搜索结果来源
 
 enum Mode { M_PIE, M_SEARCH, M_SETTINGS };
