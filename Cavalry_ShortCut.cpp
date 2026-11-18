@@ -590,6 +590,7 @@ static void LoadOps() {
         g_opsNames.push_back(name);
         g_opsHints.push_back(key);
         g_opsFiles.push_back(fname);
+        Log("op+ " + Narrow(name) + " | " + Narrow(fname) + " | cat=" + Narrow(it.cat));
     }
 }
 
@@ -919,6 +920,7 @@ static void UpdateResults() {
         g_results = pref;
         for (auto& it : rest) g_results.push_back(it);
     }
+    Log("results=" + std::to_string(g_results.size()) + " tab=" + std::to_string(g_tab) + " query=" + Narrow(g_query));
     if (g_sel >= (int)g_results.size()) g_sel = 0;
 }
 
@@ -1811,7 +1813,7 @@ static void TickCavalryState(HWND hotbox) {
         HWND under = WindowFromPoint(c);
         covered = !(under && (under == hotbox || GetAncestor(under, GA_ROOT) == hotbox));
     }
-    bool want = visible && !covered && (GetForegroundWindow() == hotbox);
+    bool want = visible && !covered && (GetForegroundWindow() == hotbox) && (g_mode == M_PIE);   // 仅圆盘模式
     if (want && !spaceOn) { RegisterHotKey(g_msgWndGlobal, 2, MOD_NOREPEAT, VK_SPACE); spaceOn = true; }
     else if (!want && spaceOn) { UnregisterHotKey(g_msgWndGlobal, 2); spaceOn = false; }
 }
@@ -2555,6 +2557,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         ShowAtCursor(hwnd);
         return 0;
     case WM_HOTKEY:
+        if ((int)wp == 2 && g_mode != M_PIE) return 0;   // 搜索/设置里空格归输入
         Log("WM_HOTKEY id=" + std::to_string((int)wp));
         { HWND fgc = GetForegroundWindow(); if (!IsCavalryWindow(fgc) && !IsWindowVisible((HWND)(g_main ? g_main : hwnd))) return 0; }
         if (wp == 2) { PostMessageW(hwnd, WM_APP + 7, 0, 0); return 0; }   // 空格确认
