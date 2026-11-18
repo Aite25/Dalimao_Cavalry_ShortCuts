@@ -1704,10 +1704,12 @@ static void ShowAtCursor(HWND hwnd) {
 { HDC dc0 = GetDC(hwnd); RECT rc0 = { 0, 0, g_winW, g_winH }; HBRUSH b0 = CreateSolidBrush(RGB(0,0,0)); FillRect(dc0, &rc0, b0); DeleteObject(b0); ReleaseDC(hwnd, dc0); }
     InvalidateRect(hwnd, nullptr, TRUE);
     UpdateWindow(hwnd);   // 先按"圆盘"画好，再显示
+    SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 1, LWA_COLORKEY | LWA_ALPHA);   // 先几乎透明，避免首帧残影
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, SWP_SHOWWINDOW);   // 激活窗口，保证键盘事件进来
     SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, g_winW, g_winH, 0);
     InvalidateRect(hwnd, nullptr, TRUE);
     UpdateWindow(hwnd);   // 显示后立刻补画一帧，抵消首帧残影
+    SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);   // 画好后再恢复不透明
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
     ForceForeground(hwnd);
     if (g_edit) ShowWindow(g_edit, SW_HIDE);
