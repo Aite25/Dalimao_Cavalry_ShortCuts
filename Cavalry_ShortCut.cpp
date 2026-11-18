@@ -448,6 +448,8 @@ static void RunScriptText(const std::string& script) {
 }
 
 static std::wstring Trim(const std::wstring& s);
+static bool IsCavalryWindow(HWND h);
+static HWND g_cavalryWnd = nullptr;
 // ---------------------------------------------------------------- 操作（快捷键）
 static UINT VkFromToken(const std::wstring& t) {
     if (t.empty()) return 0;
@@ -522,7 +524,12 @@ static void RunItem(const Item& it) {
     } else if (it.kind == L"layer") {
         RunScriptText("(function(){var id=api.create(\"" + Narrow(it.value) + "\"); if(id) api.select([id]);})();");
     } else if (it.kind == L"keys") {
-        SendCombo(it.value);
+        {
+            HWND cav = g_cavalryWnd;
+            if (!cav || !IsWindow(cav)) { HWND fg = GetForegroundWindow(); if (IsCavalryWindow(fg)) cav = fg; }
+            if (cav && IsWindow(cav)) { SetForegroundWindow(cav); Sleep(90); }
+            SendCombo(it.value);
+        }
     }
     ShowWindow(g_main, SW_HIDE);
     g_mode = M_PIE;
@@ -796,7 +803,7 @@ static void UpdateResults() {
     g_results.clear();
     for (auto& it : g_index) {
         if (g_tab > 0 && it.cat != kTabs[g_tab]) continue;
-        if (!MatchScore(it.name, g_query)) continue;
+        if (!MatchScore(it.name, g_query) && !MatchScore(it.value, g_query)) continue;
         g_results.push_back(it);
         if (g_results.size() >= 400) break;
     }
@@ -1130,6 +1137,11 @@ static void DrawResults(HDC dc) {
         }
         SetTextColor(dc, RGB(210, 210, 210));
         {
+            if (g_results[i].kind == L"keys") {
+                SetTextColor(dc, RGB(165, 170, 180));
+                RECT kr = { r.right - 150, r.top, r.right - 66, r.bottom };
+                DrawTextW(dc, g_results[i].value.c_str(), -1, &kr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+            }
             RECT tg = { r.right - 60, r.top, r.right - 8, r.bottom };
             std::wstring tagv = (g_results[i].kind == L"script") ? L"脚本" : ((g_results[i].kind == L"keys") ? L"操作" : L"图层");
             DrawTextW(dc, tagv.c_str(), -1, &tg, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
@@ -1546,7 +1558,6 @@ static std::string DescribeWindow(HWND h) {
     return out;
 }
 static DWORD g_shownTick = 0;
-static HWND g_cavalryWnd = nullptr;   // 呼出热盒时 Cavalry 的前台窗口
 
 static bool AnyCavalryVisible() {
     CavProbe pr = { false, false };
