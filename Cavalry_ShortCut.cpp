@@ -1440,9 +1440,11 @@ static void DrawMiniPie(HDC dc, RECT area, int sel) {
 }
 static RECT SetRingRect(int i) {
     RECT p = PanelRect();
-    int cx = p.left + 160, cy = p.top + 290;
+    int cx = p.left + 175, cy = p.top + 300;
     int ox = 0, oy = 0;
-    const int dx = 96, dy = 56, ddx = 70, ddy = 46;
+    const double s = 0.60;   // 与真实热盒同一套偏移，等比缩小
+    const int dx = (int)(kOffDiagX * s), dy = (int)(kOffVert * s);
+    const int ddx = (int)(kOffDiagX * s), ddy = (int)(kOffDiagY * s);
     switch (i) {
         case 0: oy = -dy; break;
         case 1: ox = ddx; oy = -ddy; break;
@@ -1454,10 +1456,16 @@ static RECT SetRingRect(int i) {
         case 7: ox = -ddx; oy = -ddy; break;
     }
     RECT r;
-    r.left = cx + ox - 46;
-    r.right = cx + ox + 46;
-    r.top = cy + oy - 12;
-    r.bottom = cy + oy + 12;
+    r.left = cx + ox - 48;
+    r.right = cx + ox + 48;
+    r.top = cy + oy - 11;
+    r.bottom = cy + oy + 11;
+    return r;
+}
+
+static RECT SetHotkeyRect() {
+    RECT p = PanelRect();
+    RECT r = { p.left + 40, p.top + 400, p.left + 310, p.top + 430 };
     return r;
 }
 
@@ -1524,6 +1532,22 @@ static void DrawSettings(HDC dc) {
         DeleteObject(fc);
     }
 
+    {   // 左下半：呼出快捷键
+        RECT hk = SetHotkeyRect();
+        FillRound(dc, hk, 6, RGB(34, 34, 38), RGB(62, 62, 68));
+        SetBkMode(dc, TRANSPARENT);
+        HFONT fh = MakeFont(15);
+        HGDIOBJ oh = SelectObject(dc, fh);
+        SetTextColor(dc, RGB(205, 208, 215));
+        RECT lt = hk; lt.left += 12; lt.right -= 150;
+        DrawTextW(dc, L"呼出快捷键", -1, &lt, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        SetTextColor(dc, g_captureHotkey ? RGB(120, 200, 255) : RGB(255, 210, 120));
+        std::wstring hv = g_captureHotkey ? std::wstring(L"按下按键…") : (g_hotkeySpec.empty() ? std::wstring(L"未设置") : g_hotkeySpec);
+        RECT vt = hk; vt.left = hk.right - 150; vt.right -= 10;
+        DrawTextW(dc, hv.c_str(), -1, &vt, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        SelectObject(dc, oh);
+        DeleteObject(fh);
+    }
     {   // 右：搜索 + 结果（点击即绑定到左侧选中的扇区）
         HFONT ft = MakeFont(14);
         HGDIOBJ of = SelectObject(dc, ft);
@@ -2635,6 +2659,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     InvalidateRect(hwnd, nullptr, TRUE);
                     return 0;
                 }
+            }
+            {   // 呼出快捷键行
+                RECT hk = SetHotkeyRect();
+                if (p.x >= hk.left && p.x < hk.right && p.y >= hk.top && p.y < hk.bottom) { g_captureHotkey = true; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
             }
             for (int i = 0; i < 8; ++i) {   // 左侧环状热盒：点击选中
                 RECT rr0 = SetRingRect(i);
