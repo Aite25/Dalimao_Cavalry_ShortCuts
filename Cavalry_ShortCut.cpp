@@ -2225,9 +2225,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         POINT rp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
         if (g_mode == M_SEARCH) {
             RECT fr = RowRect(0);
-            int rowHit = (rp.y - fr.top) / 26;
+            int rowHit = (rp.y - fr.top) / 30;   // 行高 30
             int idx2 = g_scroll + rowHit;
-            if (rp.x >= fr.left && rp.x < fr.right && rowHit >= 0 && rowHit < VisibleRows() && idx2 >= 0 && idx2 < (int)g_results.size()) {
+            RECT rr0 = RowRect(rowHit >= 0 ? rowHit : 0);
+            if (rp.x >= rr0.left && rp.x < rr0.right && rp.y >= rr0.top && rp.y < rr0.bottom && rowHit >= 0 && rowHit < VisibleRows() && idx2 >= 0 && idx2 < (int)g_results.size()) {
                 g_sel = idx2;
                 HMENU hm = CreatePopupMenu();
                 AppendMenuW(hm, MF_STRING, 1001, L"绑定到热盒…");
