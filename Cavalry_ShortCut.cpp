@@ -1819,49 +1819,24 @@ static void TickCavalryState(HWND hotbox) {
 }
 
 
-
-// 透明输入层：覆盖热盒窗口（外扩一点），负责滚轮切热盒 / 空白处左键确认，
-// 其余鼠标消息都转发给主窗口，保证 hover、点击、拖拽行为不变。
 static LRESULT CALLBACK CatcherProc(HWND h, UINT m, WPARAM w, LPARAM l) {
-    if (!g_main) return DefWindowProcW(h, m, w, l);
-    switch (m) {
-        case WM_MOUSEMOVE:
-        case WM_LBUTTONDOWN:
-        case WM_LBUTTONUP:
-        case WM_LBUTTONDBLCLK:
-        case WM_RBUTTONDOWN:
-        case WM_RBUTTONUP: {
-            POINT pt = { GET_X_LPARAM(l), GET_Y_LPARAM(l) };
-            ClientToScreen(h, &pt);
-            ScreenToClient(g_main, &pt);
-            PostMessageW(g_main, m, w, MAKELPARAM(pt.x, pt.y));
-            return 0;
-        }
-        case WM_MOUSEWHEEL:
-        case WM_MOUSEHWHEEL: {
-            PostMessageW(g_main, m, w, l);
-            return 0;
-        }
-        default:
-            break;
+    if (m == WM_LBUTTONDOWN) {
+        if (g_main) PostMessageW(g_main, WM_APP + 7, 0, 0);
+        return 0;
     }
     return DefWindowProcW(h, m, w, l);
 }
 
 static void ShowCatcher(bool show) {
     if (!g_catcher) return;
-    if (show && g_main) {
-        RECT wr; GetWindowRect(g_main, &wr);
-        InflateRect(&wr, 24, 24);
-        SetWindowPos(g_catcher, HWND_TOPMOST, wr.left, wr.top,
-                     wr.right - wr.left, wr.bottom - wr.top,
-                     SWP_SHOWWINDOW | SWP_NOACTIVATE);
-        SetLayeredWindowAttributes(g_catcher, 0, 1, LWA_ALPHA);   // alpha=1：看不见但能收输入
+    if (show) {
+        int vx = GetSystemMetrics(SM_XVIRTUALSCREEN), vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        int vw = GetSystemMetrics(SM_CXVIRTUALSCREEN), vh = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+        SetWindowPos(g_catcher, HWND_TOPMOST, vx, vy, vw, vh, SWP_SHOWWINDOW | SWP_NOACTIVATE);
     } else {
         ShowWindow(g_catcher, SW_HIDE);
     }
 }
-
 // ---------------------------------------------------------------- 窗口
 #define HOTKEY_TOGGLE 1
 #define IDM_ACTIONS 3003
@@ -1886,7 +1861,6 @@ static void ForceForeground(HWND hwnd) {
 }
 
 static void HideHotbox(HWND hwnd) {
-    ShowCatcher(false);
     // 先把界面复位成圆盘并画好，再隐藏：这样下次显示的第一帧就是圆盘，不会闪搜索面板
     g_mode = M_PIE;
     g_hover = -1;
@@ -1948,7 +1922,7 @@ static void ShowAtCursor(HWND hwnd) {
     InvalidateRect(hwnd, nullptr, TRUE);
     UpdateWindow(hwnd);   // 显示后立刻补画一帧，抵消首帧残影
     SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);   // 画好后再恢复不透明
-    ShowCatcher(true);   // 透明输入层：滚轮切热盒、空白处左键确认
+    ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
     if (cavFrontAtShow) ForceForeground(hwnd);   // 非 Cavalry 触发：不抢焦点
     if (g_edit) ShowWindow(g_edit, SW_HIDE);
     RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
@@ -2079,6 +2053,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CREATE:
         g_bgBrush = CreateSolidBrush(kBg);
         return 0;
+    case WM_PAINT:
         Paint(hwnd);
         return 0;
     case WM_ERASEBKGND:
@@ -2694,7 +2669,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     cc.hInstance = inst;
     cc.lpszClassName = L"CavalryShortCutCatcher";
     RegisterClassW(&cc);
-    g_catcher = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE, L"CavalryShortCutCatcher", L"", WS_POPUP,
+    g_catcher = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST, L"CavalryShortCutCatcher", L"", WS_POPUP,
                                 0, 0, 100, 100, nullptr, nullptr, inst, nullptr);
     if (g_catcher) SetLayeredWindowAttributes(g_catcher, 0, 1, LWA_ALPHA);   // 几乎全透明但能收点击
 
