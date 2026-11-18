@@ -1439,6 +1439,14 @@ static BOOL CALLBACK CavProbeProc(HWND h, LPARAM lp) {
 }
 
 // 每 tick 调用：Cavalry 没有"可见且未最小化"的窗口 → 收起热盒
+
+static std::string DescribeWindow(HWND h) {
+    if (!h) return "null";
+    wchar_t cls[128] = {0}; GetClassNameW(h, cls, 128);
+    DWORD pid = 0; GetWindowThreadProcessId(h, &pid);
+    std::string out = Narrow(cls) + "/" + std::to_string(pid);
+    return out;
+}
 static HWND g_cavalryWnd = nullptr;   // 呼出热盒时 Cavalry 的前台窗口
 
 static bool AnyCavalryVisible() {
@@ -1462,6 +1470,7 @@ static void TickCavalryState(HWND hotbox) {
     }
 
     if (hideNow && IsWindowVisible(hotbox)) {
+        Log(std::string("tick hide: fg=") + DescribeWindow(GetForegroundWindow()) + " alive=" + (alive ? "1" : "0"));
         g_binding = false;
         g_mode = M_PIE;
         g_hover = -1;
@@ -1535,7 +1544,7 @@ static void ShowAtCursor(HWND hwnd) {
     if (x + g_winW > work.right) x = work.right - g_winW;
     if (y + g_winH > work.bottom) y = work.bottom - g_winH;
 
-    SetWindowPos(hwnd, HWND_TOP, x, y, g_winW, g_winH, SWP_SHOWWINDOW);
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, SWP_SHOWWINDOW | SWP_NOACTIVATE);
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
     ForceForeground(hwnd);
     InvalidateRect(hwnd, nullptr, TRUE);
@@ -1623,8 +1632,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             bool cavThere = AnyCavalryVisible() && (IsCavalryWindow(GetForegroundWindow()) || IsWindowVisible(hwnd));
             bool trigHit = cavThere && trig[0] && GetFileAttributesExW(trig, GetFileExInfoStandard, &fad) && CompareFileTime(&fad.ftLastWriteTime, &lastTrig) != 0;
             if (trigHit) {
+                { HWND fgx = GetForegroundWindow(); Log(std::string("trigger hit, fg=") + DescribeWindow(fgx) + " cavFront=" + ((IsCavalryWindow(fgx) || IsWindowVisible(hwnd)) ? "1" : "0")); }
                 lastTrig = fad.ftLastWriteTime;
-                if (!IsWindowVisible(hwnd) || g_mode != M_PIE) ShowAtCursor(hwnd);
+                            if (!IsWindowVisible(hwnd) || g_mode != M_PIE) { ShowAtCursor(hwnd); Log(std::string("after show: vis=") + (IsWindowVisible(hwnd) ? "1" : "0") + " fg=" + DescribeWindow(GetForegroundWindow())); }
                 InvalidateRect(hwnd, nullptr, TRUE);
             }
         }
