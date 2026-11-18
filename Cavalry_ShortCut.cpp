@@ -1739,9 +1739,19 @@ static void WarmBridgeAsync(bool force = false) {
     if (!force && GetTickCount() - g_lastWarm < 20000) return;   // 20s 内不重复
     g_lastWarm = GetTickCount();
     std::thread([]() {
-        EnsurePreamble();
-        std::string o; DWORD st = 0;
-        HttpCall(L"POST", L"/call", "{\"name\":\"execute_script\",\"args\":{\"script\":\"1\"}}", o, st);
+        // Cavalry 刚启动时桥可能还没连上：最多重试 10 次，成功即停
+        for (int i = 0; i < 10; ++i) {
+            g_preambleDone = false;
+            EnsurePreamble();
+            std::string o; DWORD st = 0;
+            if (HttpCall(L"POST", L"/call", "{\"name\":\"execute_script\",\"args\":{\"script\":\"1\"}}", o, st) &&
+                o.find("\"isError\":false") != std::string::npos) {
+                Log("warmup done (try " + std::to_string(i + 1) + ")");
+                return;
+            }
+            Sleep(800);
+        }
+        Log("warmup failed");
     }).detach();
 }
 
