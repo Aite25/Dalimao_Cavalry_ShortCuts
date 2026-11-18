@@ -5,7 +5,7 @@
       {"name":"Math", "kind":"script", "value":"Math.js", "key":"E"},
       {"name":"整体移动：出点对齐播放头（Move Out）", "kind":"ops", "value":"op:3", "key":"D"},
       {"name":"", "kind":"script", "value":"", "key":"C"},
-      {"name":"出点=当前帧（裁剪尾部）", "kind":"ops", "value":"op:9", "key":"X"},
+      {"name":"出点=当前帧（裁剪尾部）", "kind":"ops", "value":"op:9", "key":"S"},
       {"name":"", "kind":"script", "value":"", "key":"Z"},
       {"name":"整体移动：入点对齐播放头（Move In）", "kind":"ops", "value":"op:2", "key":"A"},
       {"name":"Stagger", "kind":"layer", "value":"stagger", "key":"Q"}
