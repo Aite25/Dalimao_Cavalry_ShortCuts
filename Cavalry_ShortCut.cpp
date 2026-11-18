@@ -20,6 +20,7 @@
 #include <winhttp.h>
 #include <windowsx.h>
 #include <shellapi.h>
+#include <shlobj.h>
 #include <imm.h>
 #include <commctrl.h>
 #include <propidl.h>
@@ -32,6 +33,10 @@ using namespace Gdiplus;
 #include <algorithm>
 #include <cstdio>
 #include <thread>
+#include <ole2.h>
+#include <oleauto.h>
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "oleaut32.lib")
 
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "user32.lib")
@@ -677,7 +682,7 @@ static void LoadIndex() {
     g_index.clear();
 
     // 动作脚本
-    std::wstring dir = ExeDir() + L"\\actions";
+                    std::wstring dir = ExeDir() + L"\\actions";
     WIN32_FIND_DATAW fd = {};
     HANDLE h = FindFirstFileW((dir + L"\\*.js").c_str(), &fd);
     if (h != INVALID_HANDLE_VALUE) {
@@ -773,7 +778,7 @@ static void LoadSectors() {
     }
 
     if (total == 0) {   // 空配置：用 actions 目录生成默认绑定
-        std::wstring dir = ExeDir() + L"\\actions";
+                    std::wstring dir = ExeDir() + L"\\actions";
         WIN32_FIND_DATAW fd = {};
         HANDLE h = FindFirstFileW((dir + L"\\*.js").c_str(), &fd);
         std::vector<std::pair<std::wstring, std::wstring>> found;
@@ -1381,6 +1386,23 @@ static void DrawSettings(HDC dc) {
         SelectObject(dc, of2);
         DeleteObject(f);
     }
+    {   // 底部按钮：取消 / 确定
+        RECT p = PanelRect();
+        int bw = 76, bh = 26, gap = 10;
+        RECT okB = { p.right - 16 - bw, p.bottom - 16 - bh, p.right - 16, p.bottom - 16 };
+        RECT caB = { okB.left - gap - bw, okB.top, okB.left - gap, okB.bottom };
+        FillRound(dc, caB, 5, RGB(48, 48, 52), RGB(70, 70, 78));
+        FillRound(dc, okB, 5, RGB(58, 110, 168), RGB(70, 120, 180));
+        SetBkMode(dc, TRANSPARENT);
+        HFONT bf = MakeFont(13);
+        HGDIOBJ bo = SelectObject(dc, bf);
+        SetTextColor(dc, RGB(210, 214, 220));
+        DrawTextW(dc, L"取消", -1, &caB, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SetTextColor(dc, RGB(240, 245, 255));
+        DrawTextW(dc, L"确定", -1, &okB, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(dc, bo);
+        DeleteObject(bf);
+    }
 }
 
 static void DrawTabs(HDC dc) {
@@ -1664,6 +1686,43 @@ static BOOL CALLBACK CavProbeProc(HWND h, LPARAM lp) {
 }
 
 // 每 tick 调用：Cavalry 没有"可见且未最小化"的窗口 → 收起热盒
+
+static bool OpenFolderViaPidl(const std::wstring& path) {
+    PIDLIST_ABSOLUTE pidl = nullptr;
+    if (FAILED(SHParseDisplayName(path.c_str(), nullptr, &pidl, 0, nullptr))) return false;
+    HRESULT hr = SHOpenFolderAndSelectItems(pidl, 0, nullptr, 0);
+    CoTaskMemFree(pidl);
+    return SUCCEEDED(hr);
+}
+
+static bool OpenFolderViaShell(const std::wstring& path) {
+    HRESULT hrInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    // 走 Explorer 自己的 COM 服务，避免受限进程直接拉 explorer.exe 失败
+    IDispatch* pShell = nullptr;
+    CLSID clsid;
+    if (FAILED(CLSIDFromProgID(L"Shell.Application", &clsid))) { if (SUCCEEDED(hrInit)) CoUninitialize(); return false; }
+    if (FAILED(CoCreateInstance(clsid, nullptr, CLSCTX_LOCAL_SERVER, IID_IDispatch, (void**)&pShell))) { if (SUCCEEDED(hrInit)) CoUninitialize(); return false; }
+    if (!pShell) return false;
+
+    LPOLESTR name = (LPOLESTR)L"ShellExecute";
+    DISPID dispid = 0;
+    bool ok = false;
+    if (SUCCEEDED(pShell->GetIDsOfNames(IID_NULL, &name, 1, LOCALE_USER_DEFAULT, &dispid))) {
+        VARIANT arg;
+        VariantInit(&arg);
+        arg.vt = VT_BSTR;
+        arg.bstrVal = SysAllocString(path.c_str());
+        DISPPARAMS dp = { &arg, nullptr, 1, 0 };
+        VARIANT res;
+        VariantInit(&res);
+        ok = SUCCEEDED(pShell->Invoke(dispid, IID_NULL, LOCALE_USER_DEFAULT, DISPATCH_METHOD, &dp, &res, nullptr, nullptr));
+        VariantClear(&res);
+        VariantClear(&arg);
+    }
+    pShell->Release();
+    if (SUCCEEDED(hrInit)) CoUninitialize();
+    return ok;
+}
 
 static std::string DescribeWindow(HWND h) {
     if (!h) return "null";
@@ -2109,8 +2168,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (p.x >= fold.left && p.x < fold.right && p.y >= fold.top && p.y < fold.bottom) {
                 {
                     std::wstring dir = ExeDir() + L"\\actions";
-                    HINSTANCE hr = ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-                    if ((INT_PTR)hr <= 32) {   // 失败时把路径放进剪贴板，至少能手动打开
+                    bool okPidl = OpenFolderViaPidl(dir);
+                    Log(std::string("open actions via PIDL -> ") + (okPidl ? "ok" : "fail"));
+                    bool okCom = okPidl ? true : OpenFolderViaShell(dir);
+                    Log(std::string("open actions via COM -> ") + (okCom ? "ok" : "fail"));
+                    HINSTANCE hr = okCom ? (HINSTANCE)42 : ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                    Log("open actions folder -> " + std::to_string((INT_PTR)hr));
+                    if (!okCom || (INT_PTR)hr <= 32) {
                         if (OpenClipboard(nullptr)) {
                             EmptyClipboard();
                             size_t bytes = (dir.size() + 1) * sizeof(wchar_t);
@@ -2122,9 +2186,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                             CloseClipboard();
                         }
                     }
-                    Log("open actions folder -> " + std::to_string((INT_PTR)hr));
                 }
-                return 0;
             }
         }
 
@@ -2176,6 +2238,19 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
         } else if (g_mode == M_SETTINGS) {
+            {
+                POINT mp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+                RECT p = PanelRect();
+                int bw = 76, bh = 26, gap = 10;
+                RECT okB = { p.right - 16 - bw, p.bottom - 16 - bh, p.right - 16, p.bottom - 16 };
+                RECT caB = { okB.left - gap - bw, okB.top, okB.left - gap, okB.bottom };
+                if (mp.x >= okB.left && mp.x < okB.right && mp.y >= okB.top && mp.y < okB.bottom) {
+                    SaveSectors(); HideHotbox(hwnd); return 0;
+                }
+                if (mp.x >= caB.left && mp.x < caB.right && mp.y >= caB.top && mp.y < caB.bottom) {
+                    LoadSectors(); HideHotbox(hwnd); return 0;
+                }
+            }
             {   // 右上角 × ：关闭设置页
                 RECT xr = IconRect(0);
                 if (p.x >= xr.left - 6 && p.x < xr.right + 6 && p.y >= xr.top - 6 && p.y < xr.bottom + 6) {
@@ -2294,6 +2369,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (wp == VK_MENU)    { SwitchSet(g_box, (g_mod == 3) ? 0 : 3); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         }
         if (wp == VK_ESCAPE) {
+            if (g_mode == M_SETTINGS) { HideHotbox(hwnd); return 0; }   // 设置页 Esc 直接关闭
             if (g_binding) { g_binding = false; ShowWindow(hwnd, SW_HIDE); return 0; }
             if (g_mode == M_SEARCH && g_bindSlot >= 0) { g_mode = M_SETTINGS; g_bindSlot = -1; }
             else if (g_mode != M_PIE) { g_mode = M_PIE; }
@@ -2327,6 +2403,19 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             if (wp == VK_RETURN) { ExecSelected(); return 0; }
         } else if (g_mode == M_SETTINGS) {
+            {
+                POINT mp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+                RECT p = PanelRect();
+                int bw = 76, bh = 26, gap = 10;
+                RECT okB = { p.right - 16 - bw, p.bottom - 16 - bh, p.right - 16, p.bottom - 16 };
+                RECT caB = { okB.left - gap - bw, okB.top, okB.left - gap, okB.bottom };
+                if (mp.x >= okB.left && mp.x < okB.right && mp.y >= okB.top && mp.y < okB.bottom) {
+                    SaveSectors(); HideHotbox(hwnd); return 0;
+                }
+                if (mp.x >= caB.left && mp.x < caB.right && mp.y >= caB.top && mp.y < caB.bottom) {
+                    LoadSectors(); HideHotbox(hwnd); return 0;
+                }
+            }
             if (wp == VK_DOWN) { if (g_sel < 7) ++g_sel; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
             if (wp == VK_UP)   { if (g_sel > 0) --g_sel; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
             if (wp == VK_RETURN) { g_bindSlot = g_sel; EnterSearch(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
