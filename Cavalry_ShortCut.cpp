@@ -1007,23 +1007,24 @@ static void DrawResults(HDC dc) {
         int i = g_scroll + row;
         if (i >= (int)g_results.size()) break;
         RECT r = RowRect(row);
+        RECT fr = r; fr.bottom = r.top + 26;   // 整行（含行距），高亮无缝隙
         bool sel = (i == g_sel);
         bool hov = (i == g_hoverRow);
         // 普通行填面板色（看起来"无块"），hover 蓝、选中灰；再画 1px 描边
         {
             COLORREF fillc = hov ? RGB(58, 110, 168) : (sel ? RGB(70, 70, 74) : kPanelFill);
             HBRUSH fb = CreateSolidBrush(fillc);
-            FillRect(dc, &r, fb);
+            FillRect(dc, &fr, fb);
             DeleteObject(fb);
             // 行间 1px 极暗分隔线
             {
-                RECT sl = { r.left, r.bottom - 1, r.right, r.bottom };
+                RECT sl = { fr.left, fr.bottom - 1, fr.right, fr.bottom };
                 HBRUSH sb = CreateSolidBrush(RGB(42, 42, 45));
                 FillRect(dc, &sl, sb);
                 DeleteObject(sb);
             }
         }
-        if (sel) { RECT bar = { r.left, r.top, r.left + 4, r.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
+        if (sel) { RECT bar = { fr.left, fr.top, fr.left + 4, fr.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
 
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
@@ -1044,8 +1045,16 @@ static void DrawResults(HDC dc) {
 
         if (IsPinnedItem(g_results[i])) {
             SetTextColor(dc, RGB(255, 183, 77));
-            RECT pr2 = { r.right - 96, r.top, r.right - 62, r.bottom };
-            DrawTextW(dc, L"置顶", -1, &pr2, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+            RECT pr2 = { r.right - 92, r.top, r.right - 66, r.bottom };
+            {
+                HFONT pf = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                                        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                        DEFAULT_PITCH | FF_DONTCARE, L"Segoe MDL2 Assets");
+                HGDIOBJ po = SelectObject(dc, pf);
+                DrawTextW(dc, L"\uE718", -1, &pr2, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                SelectObject(dc, po);
+                DeleteObject(pf);
+            }
             SetTextColor(dc, RGB(210, 210, 210));
         }
         SetTextColor(dc, RGB(210, 210, 210));
