@@ -1685,12 +1685,15 @@ static void ShowAtCursor(HWND hwnd) {
 
     g_shownTick = GetTickCount();
     // 先短暂置顶再取消：确保能盖住当前前台窗口，但之后仍可被其它窗口覆盖
+{ HDC dc0 = GetDC(hwnd); RECT rc0 = { 0, 0, g_winW, g_winH }; HBRUSH b0 = CreateSolidBrush(RGB(0,0,0)); FillRect(dc0, &rc0, b0); DeleteObject(b0); ReleaseDC(hwnd, dc0); }
     InvalidateRect(hwnd, nullptr, TRUE);
     UpdateWindow(hwnd);   // 先按"圆盘"画好，再显示
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, SWP_SHOWWINDOW | SWP_NOACTIVATE);
     SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, g_winW, g_winH, SWP_NOACTIVATE);
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
     ForceForeground(hwnd);
+    if (g_edit) ShowWindow(g_edit, SW_HIDE);
+    RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
     InvalidateRect(hwnd, nullptr, TRUE);
 }
 
