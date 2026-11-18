@@ -1524,6 +1524,14 @@ static void Paint(HWND hwnd) {
     if (g_mode == M_PIE) {
         DrawPie(mem);
     } else if (g_mode == M_SEARCH) {
+            {   // 点击搜索面板以外（含透明输入区）= 关闭面板
+                RECT pr0 = PanelRect();
+                POINT cp0 = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+                if (cp0.x < pr0.left || cp0.x >= pr0.right || cp0.y < pr0.top || cp0.y >= pr0.bottom) {
+                    HideHotbox(hwnd);
+                    return 0;
+                }
+            }
         std::wstring title = (g_bindSlot >= 0)
             ? (L"为扇区 " + std::to_wstring(g_bindSlot + 1) + L" 选择绑定")
             : L"搜索（Enter 执行，Esc 返回）";
@@ -2384,6 +2392,14 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 InvalidateRect(hwnd, nullptr, TRUE);
             }
         } else if (g_mode == M_SEARCH) {
+            {   // 点击搜索面板以外（含透明输入区）= 关闭面板
+                RECT pr0 = PanelRect();
+                POINT cp0 = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+                if (cp0.x < pr0.left || cp0.x >= pr0.right || cp0.y < pr0.top || cp0.y >= pr0.bottom) {
+                    HideHotbox(hwnd);
+                    return 0;
+                }
+            }
     for (int row = 0; row < VisibleRows(); ++row) {
         int i = g_scroll + row;
         if (i >= (int)g_results.size()) break;
@@ -2561,6 +2577,14 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             // 字母 → 搜索（且不是已绑定的扇区键）
             if (wp >= 'A' && wp <= 'Z') { EnterSearch((wchar_t)towlower(wp)); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         } else if (g_mode == M_SEARCH) {
+            {   // 点击搜索面板以外（含透明输入区）= 关闭面板
+                RECT pr0 = PanelRect();
+                POINT cp0 = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+                if (cp0.x < pr0.left || cp0.x >= pr0.right || cp0.y < pr0.top || cp0.y >= pr0.bottom) {
+                    HideHotbox(hwnd);
+                    return 0;
+                }
+            }
             if (wp == VK_DOWN) { if (g_sel + 1 < (int)g_results.size()) ++g_sel; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
             if (wp == VK_UP)   { if (g_sel > 0) --g_sel; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
             if (wp == VK_BACK) {
