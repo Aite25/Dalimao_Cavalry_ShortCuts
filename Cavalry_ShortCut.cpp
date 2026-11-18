@@ -50,6 +50,8 @@ using namespace Gdiplus;
 static const int kBridgePort = 6769;
 static int g_winW = 640;
 static int g_winH = 560;
+static const int kPadX = 320;   // 透明输入区左右扩展
+static const int kPadY = 120;   // 透明输入区上下扩展
 
 static const COLORREF kBg          = RGB(0, 0, 0);        // 色键透明
 static const COLORREF kSectorFill  = RGB(35, 35, 35);
@@ -679,11 +681,11 @@ static void SyncEditFromMode() {
     if (!g_edit) return;
     if (g_mode == M_SEARCH) {
         RECT ir = InputRect();
-        SetWindowPos(g_edit, HWND_TOP, ir.left + 8, ir.top + 6,
+        SetWindowPos(g_edit, HWND_TOP, kPadX + ir.left + 8, kPadY + ir.top + 6,
                      ir.right - ir.left - 16, ir.bottom - ir.top - 10, SWP_SHOWWINDOW);
         {
             RECT pr = { 40, 60, g_winW - 40, g_winH - 60 };   // 与 PanelRect 一致
-            SetWindowPos(g_scrollbar, HWND_TOP, pr.right - 30, pr.top + 110,
+            SetWindowPos(g_scrollbar, HWND_TOP, kPadX + pr.right - 30, kPadY + pr.top + 110,
                          14, 7 * 38 - 4, SWP_NOZORDER);
             UpdateScrollInfo();
         }
@@ -1003,7 +1005,7 @@ static RECT IconRect(int i) {   // 只保留设置（齿轮），忽略参数
     RECT r;
     r.right = p.right - 3;
     r.left = r.right - 14;   // 正方形 14x14
-    r.top = (g_mode == M_SEARCH) ? (p.top + 0) : (p.top + 5);   // 搜索页再上移 5px
+    r.top = (g_mode == M_SEARCH) ? (p.top - 22) : (p.top + 5);   // 搜索页放到面板上方（留 8px 间距）
     r.bottom = r.top + 14;   // 29..43 → 中心 36（与 Ctrl 行一致）
     return r;
 }
@@ -1513,8 +1515,6 @@ static void DrawTopIcons(HDC dc) {
 }
 
 
-static const int kPadX = 320;   // 输入区左右扩展（透明）
-static const int kPadY = 120;   // 输入区上下扩展（透明）
 
 static void Paint(HWND hwnd) {
     PAINTSTRUCT ps;
