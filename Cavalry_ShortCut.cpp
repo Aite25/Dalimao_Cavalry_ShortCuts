@@ -2734,8 +2734,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 InflateRect(&xr2, 14, 14);   // 放大判定框，好点中
                 if (p.x >= xr2.left && p.x < xr2.right && p.y >= xr2.top && p.y < xr2.bottom) {
                     ExitSettingsMode(hwnd);
-                    g_mode = M_PIE;
-                    SyncEditFromMode();
+                    HideHotbox(hwnd);   // 直接关闭热盒
                     InvalidateRect(hwnd, nullptr, TRUE);
                     return 0;
                 }
