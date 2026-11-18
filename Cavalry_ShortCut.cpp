@@ -985,7 +985,7 @@ static RECT RowRect(int i) {
     r.left = p.left + 16;
     r.right = p.right - 34;
     r.top = p.top + 112 + i * 30;
-    r.bottom = r.top + 14;   // 29..43 → 中心 36（与 Ctrl 行一致）
+    r.bottom = r.top + 30;   // 行高 30（与 VisibleRows/命中判定一致）
     return r;
 }
 
@@ -1310,7 +1310,7 @@ static RECT SettingRowRect(int i) {
     r.left = p.left + 232;
     r.right = p.right - 16;
     r.top = p.top + 112 + i * 30;
-    r.bottom = r.top + 14;   // 29..43 → 中心 36（与 Ctrl 行一致）
+    r.bottom = r.top + 30;   // 行高 30，与列表一致
     return r;
 }
 
