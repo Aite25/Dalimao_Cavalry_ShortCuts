@@ -1475,6 +1475,7 @@ static bool AnyCavalryVisible() {
 }
 
 static void TickCavalryState(HWND hotbox) {
+    if (g_msgWndGlobal && !IsWindowVisible(hotbox)) UnregisterHotKey(g_msgWndGlobal, 2);   // 热盒没显示时不占用空格
     if (!g_cavalryWnd || !IsWindow(g_cavalryWnd)) g_cavalryWnd = nullptr;
     bool alive = g_cavalryWnd ? true : AnyCavalryVisible();
     bool hideNow = false;
@@ -1492,6 +1493,7 @@ static void TickCavalryState(HWND hotbox) {
     }
 
     if (hideNow && IsWindowVisible(hotbox)) {
+        if (g_msgWndGlobal) UnregisterHotKey(g_msgWndGlobal, 2);
         Log(std::string("tick hide reason=") + why + " fg=" + DescribeWindow(GetForegroundWindow()) + " grace=" + (grace ? "1" : "0"));
         g_binding = false;
         g_mode = M_PIE;
@@ -1570,6 +1572,7 @@ static void ShowAtCursor(HWND hwnd) {
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, SWP_SHOWWINDOW | SWP_NOACTIVATE);
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
     ForceForeground(hwnd);
+    if (g_msgWndGlobal) RegisterHotKey(g_msgWndGlobal, 2, MOD_NOREPEAT, VK_SPACE);   // 空格确认（仅热盒显示期间）
     InvalidateRect(hwnd, nullptr, TRUE);
 }
 
@@ -2130,6 +2133,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_HOTKEY:
         Log("WM_HOTKEY id=" + std::to_string((int)wp));
         { HWND fgc = GetForegroundWindow(); if (!IsCavalryWindow(fgc) && !IsWindowVisible((HWND)(g_main ? g_main : hwnd))) return 0; }
+        if (wp == 2) { PostMessageW(hwnd, WM_APP + 7, 0, 0); return 0; }   // 空格确认
         if (wp == HOTKEY_TOGGLE) {
             HWND target = g_main ? g_main : hwnd;
             bool visible = IsWindowVisible(target);
