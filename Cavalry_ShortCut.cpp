@@ -491,23 +491,32 @@ static void SendCombo(const std::wstring& spec) {
     }
     if (keys.empty()) return;
 
-    // 逐个按下（带间隔，避免被合并/丢弃）
+    // 直接投递到 Cavalry 的焦点窗口（绕过系统输入队列）
+    HWND cav = g_cavalryWnd;
+    if (!cav || !IsWindow(cav)) { HWND fg = GetForegroundWindow(); if (IsCavalryWindow(fg)) cav = fg; }
+    if (!cav) return;
+    DWORD tid = GetWindowThreadProcessId(cav, nullptr);
+    GUITHREADINFO gi = {}; gi.cbSize = sizeof(gi);
+    GetGUIThreadInfo(tid, &gi);
+    HWND target = gi.hwndFocus ? gi.hwndFocus : cav;
+
+    bool sys = false;
+    for (auto vk : keys) if (vk == VK_MENU) sys = true;
+
     for (auto vk : keys) {
-        INPUT i = {}; i.type = INPUT_KEYBOARD; i.ki.wVk = (WORD)vk;
-        i.ki.wScan = (WORD)MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
-        SendInput(1, &i, sizeof(INPUT));
-        Sleep(30);
+        UINT scan = MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
+        LPARAM lp = (LPARAM)((scan & 0xFF) << 16) | 1;
+        PostMessageW(target, sys ? WM_SYSKEYDOWN : WM_KEYDOWN, (WPARAM)vk, lp);
+        Sleep(25);
     }
-    Sleep(40);
-    // 逆序松开
+    Sleep(30);
     for (auto it = keys.rbegin(); it != keys.rend(); ++it) {
-        INPUT i = {}; i.type = INPUT_KEYBOARD; i.ki.wVk = (WORD)*it;
-        i.ki.dwFlags = KEYEVENTF_KEYUP;
-        i.ki.wScan = (WORD)MapVirtualKeyW(*it, MAPVK_VK_TO_VSC);
-        SendInput(1, &i, sizeof(INPUT));
-        Sleep(30);
+        UINT scan = MapVirtualKeyW(*it, MAPVK_VK_TO_VSC);
+        LPARAM lp = (LPARAM)((scan & 0xFF) << 16) | 1 | 0xC0000000;
+        PostMessageW(target, sys ? WM_SYSKEYUP : WM_KEYUP, (WPARAM)*it, lp);
+        Sleep(25);
     }
-    Log("sent combo " + Narrow(spec));
+    Log("sent combo " + Narrow(spec) + " to " + DescribeWindow(target));
 }
 
 static void LoadOps() {
