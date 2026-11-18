@@ -98,6 +98,7 @@ struct Item {
 };
 static Item g_bindItem;            // 待绑定的搜索项
 static std::vector<std::wstring> g_pinned;   // 置顶项 key = kind + "|" + value
+static std::vector<std::wstring> g_opsJs;   // 操作项的 JS（按 index 引用，避免存进 json 被截断）
 static std::vector<Item> g_index;      // 搜索结果来源
 
 enum Mode { M_PIE, M_SEARCH, M_SETTINGS };
@@ -553,7 +554,8 @@ static void LoadOps() {
         Item it;
         it.name = o.name;
         it.kind = L"ops";
-        it.value = o.js;
+        it.value = L"op:" + std::to_wstring(g_opsJs.size());
+        g_opsJs.push_back(o.js);
         it.key = o.hint;
         it.cat = L"操作";
         g_index.push_back(it);
@@ -569,7 +571,11 @@ static void RunItem(const Item& it) {
         } else if (item.kind == L"layer") {
             RunScriptText("(function(){var id=api.create(\"" + Narrow(item.value) + "\"); if(id) api.select([id]);})();");
         } else if (item.kind == L"ops") {
-            RunScriptText(Narrow(item.value));
+            std::string v = Narrow(item.value);
+            if (v.rfind("op:", 0) == 0) {
+                size_t idx = (size_t)atoi(v.c_str() + 3);
+                if (idx < g_opsJs.size()) RunScriptText(Narrow(g_opsJs[idx]));
+            } else { RunScriptText(v); }   // 兼容旧绑定（直接存 JS）
         } else if (item.kind == L"keys") {
             SendCombo(item.value);
         }
