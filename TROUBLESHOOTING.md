@@ -135,11 +135,58 @@ SetWindowPos(hwnd, HWND_TOPMOST, ...);                  // 4. 再显示
 
 热盒以 `SWP_NOACTIVATE` 显示时**不获取键盘焦点**，`WM_KEYDOWN` 收不到空格/反引号，空格会落到 Cavalry 触发"播放"。
 **修法**：热盒显示期间临时 `RegisterHotKey(VK_SPACE)`，隐藏时注销；被遮挡时也注销（`WindowFromPoint` 判断）。
+另外：如果 Cavalry 里有文本输入框正被编辑，系统会把焦点"粘"在它上面，热盒拿不到键盘——需要在显示后 **300ms 内持续抢焦点**（`AttachThreadInput` + `SetForegroundWindow`）。
 
 ### 10. 瞬时 `GetForegroundWindow() == null` 误杀
 
 曾用"前台不是 Cavalry 就收起"的规则，切换窗口瞬间前台为 `null`，窗口刚显示就被自己收起。
 **修法**：忽略 `null`；且已**整体取消自动关闭**（改为手动关闭），此坑不再存在。
+
+### 10b. `return 0` 放错花括号层级 → **所有左键点击失效** ⚠️ 踩过（最冤）
+
+现象：点扇区没反应、点列表没反应、只有个别按钮还能用。
+
+原因：图标区是一个块：
+
+```cpp
+{                                   // 图标块
+    if (齿轮命中)   { ...; return 0; }
+    if (文件夹命中) { ... 打开 actions ... }
+    return 0;                       // ← 放这里 = 任何点击都提前返回
+}
+```
+
+`return 0` 一旦落在块尾（而不是 `if (文件夹命中)` 内部），**所有后续的页签/扇区/列表点击都被拦截**，表现为"左键全面失效"。
+
+**修法**：`return` 必须写在对应的 `if` 分支**内部**：
+
+```cpp
+if (文件夹命中) {
+    ...;
+    return 0;   // 只拦截这一种点击
+}
+```
+
+**教训**：给某个分支补 `return` 时，先确认它落在哪个 `{ }` 里——
+用日志（`click at x,y` + 各分支自己的 log）验证，比盯着代码猜快得多。
+
+### 10c. 「打开 actions 文件夹」始终打不开
+
+`ShellExecuteW(explorer.exe, path)` 会弹 `0xc0000142`（进程启动失败）。
+
+依次尝试这三种方式，并记录日志：
+
+```cpp
+SHOpenFolderAndSelectItems(pidl)       // ① Shell 原生：打开并选中
+Shell.Application → ShellExecute(dir)  // ② 走 Explorer 的 COM 服务
+ShellExecuteW(nullptr, L"open", dir)   // ③ 系统关联
+```
+
+若都失败 → **把路径复制到剪贴板**（`SetClipboardData(CF_UNICODETEXT)`）并写日志。
+
+**注意**：由受限令牌启动的 exe（例如被脚本/CLI 拉起）常常三种都失败：
+日志会看到 `PIDL fail / COM fail / folder -> 5`，但屏幕上没有窗口。
+判断方法：**自己双击 exe** 再点一次；若此时能打开，就是令牌/会话限制，不是代码问题。
 
 ---
 
