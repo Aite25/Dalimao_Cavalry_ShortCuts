@@ -1453,8 +1453,15 @@ static void TickCavalryState(HWND hotbox) {
     bool hideNow = false;
     if (!alive) hideNow = true;
     else if (g_cavalryWnd && (IsIconic(g_cavalryWnd) || !IsWindowVisible(g_cavalryWnd))) hideNow = true;
+
+    // 只允许覆盖在 Cavalry 上：前台不是 Cavalry 也不是热盒自己 -> 收起
+    if (!hideNow && IsWindowVisible(hotbox)) {
+        HWND fg = GetForegroundWindow();
+        bool mine = (fg == hotbox) || (g_main && fg == g_main) || (g_edit && fg == g_edit);
+        if (!mine && !IsCavalryWindow(fg)) hideNow = true;
+    }
+
     if (hideNow && IsWindowVisible(hotbox)) {
-        // 直接关闭：不保留状态，下次呼出重新开始（不退出进程）
         g_binding = false;
         g_mode = M_PIE;
         g_hover = -1;
@@ -1613,7 +1620,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (env) { wcscpy_s(trig, env); wcscat_s(trig, L"\\CavalryShortCut.show"); free(env); }
             }
             WIN32_FILE_ATTRIBUTE_DATA fad = {};
-            bool cavThere = AnyCavalryVisible();
+            bool cavThere = AnyCavalryVisible() && (IsCavalryWindow(GetForegroundWindow()) || IsWindowVisible(hwnd));
             bool trigHit = cavThere && trig[0] && GetFileAttributesExW(trig, GetFileExInfoStandard, &fad) && CompareFileTime(&fad.ftLastWriteTime, &lastTrig) != 0;
             if (trigHit) {
                 lastTrig = fad.ftLastWriteTime;
