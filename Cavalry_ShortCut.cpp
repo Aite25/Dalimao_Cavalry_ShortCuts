@@ -123,6 +123,7 @@ static bool g_inMenu = false;
 static bool g_imeOn = true;   // 输入框是否启用输入法（Cavalry_ShortCut.ini: ime=off 可关）
 static bool g_dragging = false;
 static bool g_selAll = false;
+static bool g_swallowChar = false;   // 捕获快捷键后吞掉随之而来的 WM_CHAR
 static void SyncEditText();
 static void UpdateResults();
 static POINT g_dragOffset = {0, 0};
@@ -2745,6 +2746,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 
     case WM_CHAR: {
+        if (g_swallowChar) {   // 捕获快捷键时按下的那个字符，不要再打进输入框
+            g_swallowChar = false;
+            if (g_edit) SetWindowTextW(g_edit, g_query.c_str());
+            return 0;
+        }
         if (g_mode == M_SEARCH || g_mode == M_SETTINGS) {
             if (g_selAll) { g_query.clear(); g_selAll = false; if (g_edit) SetWindowTextW(g_edit, L""); }
             if (g_edit) {   // 消息能到主窗口，就说明字符是冲我们来的，一律转交
@@ -2823,6 +2829,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (!nm.empty()) {
                 std::wstring spec = nm;   // 扇区快捷键：单个键
                 g_slots[g_sel].key = spec;
+                g_swallowChar = true;
                 g_captureHotkey = false;
                 SaveSectors();
                 Log("captured sector key " + Narrow(spec));
