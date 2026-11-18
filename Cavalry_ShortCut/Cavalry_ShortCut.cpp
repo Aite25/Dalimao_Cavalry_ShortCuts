@@ -20,6 +20,7 @@
 #include <winhttp.h>
 #include <windowsx.h>
 #include <shellapi.h>
+#include <shlobj.h>
 #include <imm.h>
 #include <commctrl.h>
 #include <propidl.h>
@@ -31,6 +32,11 @@ using namespace Gdiplus;
 #include <map>
 #include <algorithm>
 #include <cstdio>
+#include <thread>
+#include <ole2.h>
+#include <oleauto.h>
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "oleaut32.lib")
 
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "user32.lib")
@@ -58,7 +64,7 @@ static const COLORREF kRowSel       = RGB(56, 119, 181);
 
 static const int kCenterR  = 28;
 static const int kRectW    = 150;
-static const int kRectH    = 34;
+static const int kRectH    = 28;
 static const int kOffVert  = 118;
 static const int kOffHoriz = 172;
 static const int kOffDiagX = 105;
@@ -88,6 +94,7 @@ struct Item {
     std::wstring kind;
     std::wstring value;
     std::wstring cat;      // 脚本 / 形状 / 行为 / 工具 / 效果
+    std::wstring key;      // 展示用提示（如快捷键）
 };
 static Item g_bindItem;            // 待绑定的搜索项
 static std::vector<std::wstring> g_pinned;   // 置顶项 key = kind + "|" + value
@@ -114,8 +121,8 @@ static std::vector<Item> g_results;
 static void SyncEditFromMode();
 static void UpdateScrollInfo();
 static int g_tab = 0;
-static const wchar_t* kTabs[] = { L"全部", L"脚本", L"形状", L"行为", L"工具", L"效果" };
-static const int kTabCount = 6;
+static const wchar_t* kTabs[] = { L"全部", L"脚本", L"形状", L"行为", L"工具", L"效果", L"操作" };
+static const int kTabCount = 7;
 static HWND g_edit = nullptr;
 static HWND g_scrollbar = nullptr;
 static int g_scroll = 0;
@@ -419,26 +426,153 @@ static bool StartBridge() {
     return false;
 }
 
+static bool g_preambleDone = false;
+
+static void EnsurePreamble() {
+    if (g_preambleDone) return;
+    std::string out; DWORD st = 0;
+    if (HttpCall(L"POST", L"/call", "{\"name\":\"read_preamble\",\"args\":{}}", out, st)) {
+        g_preambleDone = true;
+    }
+}
+
 static void RunScriptText(const std::string& script) {
     if (script.empty()) return;
     std::string body = "{\"name\":\"execute_script\",\"args\":{\"script\":\"" + EscapeJson(script) + "\"}}";
     std::string out;
     DWORD st = 0;
+    EnsurePreamble();
     if (!HttpCall(L"POST", L"/call", body, out, st)) Log("bridge call failed");
+    else if (out.find("Read the preamble") != std::string::npos) {
+        g_preambleDone = false;
+        EnsurePreamble();
+        HttpCall(L"POST", L"/call", body, out, st);
+        Log("ran script (retry after preamble) -> " + std::string(out.find("isError\":false") != std::string::npos ? "ok" : "error"));
+        return;
+    }
     else Log("ran script (" + std::to_string(script.size()) + " bytes) -> " +
              (out.find("\"isError\":false") != std::string::npos ? "ok" : "error"));
 }
 
-static void RunItem(const Item& it) {
-    if (it.kind == L"script") {
-        RunScriptText(ReadFileUtf8(ExeDir() + L"\\actions\\" + it.value));
-    } else if (it.kind == L"layer") {
-        RunScriptText("(function(){var id=api.create(\"" + Narrow(it.value) + "\"); if(id) api.select([id]);})();");
+static std::wstring Trim(const std::wstring& s);
+static bool IsCavalryWindow(HWND h);
+static void HideHotbox(HWND hwnd);
+static std::string DescribeWindow(HWND h);
+static HWND g_cavalryWnd = nullptr;
+// ---------------------------------------------------------------- 操作（快捷键）
+static UINT VkFromToken(const std::wstring& t) {
+    if (t.empty()) return 0;
+    std::wstring low = ToLower(t);
+    if (low == L"alt") return VK_MENU;
+    if (low == L"ctrl") return VK_CONTROL;
+    if (low == L"shift") return VK_SHIFT;
+    if (low == L"space") return VK_SPACE;
+    if (low == L"home") return VK_HOME;
+    if (low == L"end") return VK_END;
+    if (low == L"left") return VK_LEFT;
+    if (low == L"right") return VK_RIGHT;
+    if (low == L"up") return VK_UP;
+    if (low == L"down") return VK_DOWN;
+    if (low == L"enter") return VK_RETURN;
+    if (low == L"delete") return VK_DELETE;
+    if (t == L"[") return VK_OEM_4;
+    if (t == L"]") return VK_OEM_6;
+    if (t == L",") return VK_OEM_COMMA;
+    if (t == L".") return VK_OEM_PERIOD;
+    if (t == L"-") return VK_OEM_MINUS;
+    if (t == L"=") return VK_OEM_PLUS;
+    if (low.size() >= 2 && low[0] == L'f') { int n = _wtoi(low.c_str() + 1); if (n >= 1 && n <= 24) return VK_F1 + n - 1; }
+    if (t.size() == 1) { wchar_t c = (wchar_t)towupper(t[0]); if ((c >= L'A' && c <= L'Z') || (c >= L'0' && c <= L'9')) return (UINT)c; }
+    return 0;
+}
+
+static void SendCombo(const std::wstring& spec) {
+    std::vector<UINT> keys;
+    size_t start = 0;
+    while (start <= spec.size()) {
+        size_t plus = spec.find(L'+', start);
+        std::wstring tok = Trim(plus == std::wstring::npos ? spec.substr(start) : spec.substr(start, plus - start));
+        UINT vk = VkFromToken(tok);
+        if (vk) keys.push_back(vk);
+        if (plus == std::wstring::npos) break;
+        start = plus + 1;
     }
-    ShowWindow(g_main, SW_HIDE);
-    g_mode = M_PIE;
-    SyncEditFromMode();
-    g_query.clear();
+    if (keys.empty()) return;
+
+    // 直接投递到 Cavalry 的焦点窗口（绕过系统输入队列）
+    HWND cav = g_cavalryWnd;
+    if (!cav || !IsWindow(cav)) { HWND fg = GetForegroundWindow(); if (IsCavalryWindow(fg)) cav = fg; }
+    if (!cav) return;
+    DWORD tid = GetWindowThreadProcessId(cav, nullptr);
+    GUITHREADINFO gi = {}; gi.cbSize = sizeof(gi);
+    GetGUIThreadInfo(tid, &gi);
+    HWND target = gi.hwndFocus ? gi.hwndFocus : cav;
+
+    bool sys = false;
+    for (auto vk : keys) if (vk == VK_MENU) sys = true;
+
+    for (auto vk : keys) {
+        UINT scan = MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
+        LPARAM lp = (LPARAM)((scan & 0xFF) << 16) | 1;
+        PostMessageW(target, sys ? WM_SYSKEYDOWN : WM_KEYDOWN, (WPARAM)vk, lp);
+        Sleep(25);
+    }
+    Sleep(30);
+    for (auto it = keys.rbegin(); it != keys.rend(); ++it) {
+        UINT scan = MapVirtualKeyW(*it, MAPVK_VK_TO_VSC);
+        LPARAM lp = (LPARAM)((scan & 0xFF) << 16) | 1 | 0xC0000000;
+        PostMessageW(target, sys ? WM_SYSKEYUP : WM_KEYUP, (WPARAM)*it, lp);
+        Sleep(25);
+    }
+    Log("sent combo " + Narrow(spec) + " to " + DescribeWindow(target));
+}
+
+static void LoadOps() {
+    // 每个操作都是一段通过 MCP 在 Cavalry 里执行的脚本，不依赖键盘模拟
+    struct Op { const wchar_t* name; const wchar_t* hint; const wchar_t* js; };
+    static const Op ops[] = {
+        { L"设入点（设为当前帧）", L"[",
+          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){var oldIn=api.getInFrame(sel[i]);api.setInFrame(sel[i],f);if(oldIn!==f){api.offsetLayerTime(sel[i],(f-oldIn));}}return \"setIn \"+sel.length;})();" },
+        { L"设出点（设为当前帧）", L"]",
+          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setOutFrame(sel[i],f);}return \"setOut \"+sel.length;})();" },
+        { L"入点=当前帧（裁剪头部）", L"Alt+[",
+          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setInFrame(sel[i],f);}return \"trimIn \"+sel.length;})();" },
+        { L"出点=当前帧（裁剪尾部）", L"Alt+]",
+          L"(function(){var f=api.getFrame();var sel=api.getSelection();for(var i=0;i<sel.length;i++){api.setOutFrame(sel[i],f);}return \"trimOut \"+sel.length;})();" },
+        { L"上一帧", L"Left",
+          L"(function(){api.setFrame(api.getFrame()-1);return \"prev\";})();" },
+        { L"下一帧", L"Right",
+          L"(function(){api.setFrame(api.getFrame()+1);return \"next\";})();" },
+        { L"跳到起点", L"Home",
+          L"(function(){api.setFrame(0);return \"start\";})();" },
+        { L"跳到当前图层出点", L"End",
+          L"(function(){var sel=api.getSelection();if(!sel.length)return \"none\";api.setFrame(api.getOutFrame(sel[sel.length-1]));return \"toOut\";})();" },
+    };
+    for (auto& o : ops) {
+        Item it;
+        it.name = o.name;
+        it.kind = L"ops";
+        it.value = o.js;
+        it.key = o.hint;
+        it.cat = L"操作";
+        g_index.push_back(it);
+    }
+}
+
+static void RunItem(const Item& it) {
+    HideHotbox(g_main ? g_main : GetActiveWindow());   // 先收起，立刻给反馈
+    Item item = it;
+    std::thread([item]() {
+        if (item.kind == L"script") {
+            RunScriptText(ReadFileUtf8(ExeDir() + L"\\actions\\" + item.value));
+        } else if (item.kind == L"layer") {
+            RunScriptText("(function(){var id=api.create(\"" + Narrow(item.value) + "\"); if(id) api.select([id]);})();");
+        } else if (item.kind == L"ops") {
+            RunScriptText(Narrow(item.value));
+        } else if (item.kind == L"keys") {
+            SendCombo(item.value);
+        }
+    }).detach();
 }
 
 static void SyncEditFromMode();
@@ -548,7 +682,7 @@ static void LoadIndex() {
     g_index.clear();
 
     // 动作脚本
-    std::wstring dir = ExeDir() + L"\\actions";
+                    std::wstring dir = ExeDir() + L"\\actions";
     WIN32_FIND_DATAW fd = {};
     HANDLE h = FindFirstFileW((dir + L"\\*.js").c_str(), &fd);
     if (h != INVALID_HANDLE_VALUE) {
@@ -644,7 +778,7 @@ static void LoadSectors() {
     }
 
     if (total == 0) {   // 空配置：用 actions 目录生成默认绑定
-        std::wstring dir = ExeDir() + L"\\actions";
+                    std::wstring dir = ExeDir() + L"\\actions";
         WIN32_FIND_DATAW fd = {};
         HANDLE h = FindFirstFileW((dir + L"\\*.js").c_str(), &fd);
         std::vector<std::pair<std::wstring, std::wstring>> found;
@@ -707,7 +841,7 @@ static void UpdateResults() {
     g_results.clear();
     for (auto& it : g_index) {
         if (g_tab > 0 && it.cat != kTabs[g_tab]) continue;
-        if (!MatchScore(it.name, g_query)) continue;
+        if (!MatchScore(it.name, g_query) && !MatchScore(it.value, g_query)) continue;
         g_results.push_back(it);
         if (g_results.size() >= 400) break;
     }
@@ -784,7 +918,7 @@ static RECT RowRect(int i) {
     r.left = p.left + 16;
     r.right = p.right - 34;
     r.top = p.top + 112 + i * 26;
-    r.bottom = r.top + 20;
+    r.bottom = r.top + 26;
     return r;
 }
 
@@ -805,7 +939,7 @@ static RECT IconRect(int i) {   // 0=文件夹 1=齿轮
     r.right = p.right - 12 - i * 26;
     r.left = r.right - 20;
     r.top = p.top + 10;
-    r.bottom = r.top + 20;
+    r.bottom = r.top + 26;
     return r;
 }
 
@@ -858,14 +992,32 @@ static void DrawPie(HDC dc) {
             SetTextColor(dc, RGB(90, 90, 90));
             DrawTextW(dc, L"—", -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         } else {
+            {   // 图标（图层类显示 Add Layers 同款图标）
+                int cy0 = (r.top + r.bottom) / 2;
+                RECT ib = { r.left + 8, cy0 - 8, r.left + 24, cy0 + 8 };
+                if (g_slots[i].kind == L"layer") DrawIcon(dc, g_slots[i].value, ib);
+                else if (g_slots[i].used) {
+                    HFONT gf = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                                            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                            DEFAULT_PITCH | FF_DONTCARE, L"Segoe MDL2 Assets");
+                    HGDIOBJ go2 = SelectObject(dc, gf);
+                    SetTextColor(dc, RGB(150, 155, 165));
+                    const wchar_t* glyph = (g_slots[i].kind == L"ops") ? L"\uE8EF" : L"\uE943";
+                    DrawTextW(dc, glyph, -1, &ib, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
+                    SelectObject(dc, go2);
+                    DeleteObject(gf);
+                }
+            }
             SetTextColor(dc, kText);
-            RECT tr = { r.left + 6, r.top, r.right - 6, r.bottom };
-            DrawTextW(dc, g_slots[i].name.c_str(), -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOCLIP);
+            RECT tr = { r.left + 28, r.top, r.right - 34, r.bottom };
+            DrawTextW(dc, g_slots[i].name.c_str(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOCLIP);
 
             SetTextColor(dc, kTextDim);
-            SetTextAlign(dc, TA_RIGHT | TA_TOP);
+            SetTextAlign(dc, TA_LEFT | TA_TOP);
             std::wstring k = g_slots[i].key.empty() ? std::to_wstring(i + 1) : g_slots[i].key;
-            TextOutW(dc, r.right - 8, r.top + 6, k.c_str(), (int)k.size());
+            RECT kr = { r.right - 32, r.top, r.right - 8, r.bottom };
+            SetTextAlign(dc, TA_LEFT | TA_TOP);
+            DrawTextW(dc, k.c_str(), -1, &kr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
         }
         SelectObject(dc, of);
         DeleteObject(f);
@@ -878,8 +1030,8 @@ static void DrawPie(HDC dc) {
         int dcSaved = SaveDC(dc);   // GDI+ 会改 DC 状态，用完恢复
         Gdiplus::Graphics g(dc);
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        Gdiplus::SolidBrush ffill(Gdiplus::Color(255, 38, 38, 38));
-        Gdiplus::Pen bborder(Gdiplus::Color(255, 31, 31, 31), 2.0f);
+        Gdiplus::SolidBrush ffill(Gdiplus::Color(255, 43, 43, 46));
+        Gdiplus::Pen bborder(Gdiplus::Color(255, 62, 62, 68), 1.5f);
         g.FillEllipse(&ffill, cx - kCenterR, cy - kCenterR, kCenterR * 2, kCenterR * 2);
         g.DrawEllipse(&bborder, cx - kCenterR, cy - kCenterR, kCenterR * 2, kCenterR * 2);
 
@@ -888,12 +1040,12 @@ static void DrawPie(HDC dc) {
             double dx = (r.left + r.right) / 2.0 - cx;
             double dy = (r.top + r.bottom) / 2.0 - cy;
             double angDeg = atan2(dy, dx) * 180.0 / 3.14159265358979;
-            int ar = kCenterR - 8;
-            Gdiplus::Pen arcPen(Gdiplus::Color(255, 56, 119, 181), 3.0f);
+            int ar = kCenterR + 2;   // 弧线压在圆环外沿（AE 风格）
+            Gdiplus::Pen arcPen(Gdiplus::Color(255, 90, 155, 232), 4.0f);
             arcPen.SetStartCap(Gdiplus::LineCapRound);
             arcPen.SetEndCap(Gdiplus::LineCapRound);
             g.DrawArc(&arcPen, (REAL)(cx - ar), (REAL)(cy - ar), (REAL)(ar * 2), (REAL)(ar * 2),
-                      (REAL)(angDeg - 28.0), (REAL)56.0);
+                      (REAL)(angDeg - 26.0), (REAL)52.0);
         }
         RestoreDC(dc, dcSaved);
     }
@@ -978,6 +1130,23 @@ static void DrawScrollBar(HDC dc) {
     FillRound(dc, th, 3, g_thumbDrag ? RGB(150, 150, 158) : RGB(110, 110, 118), RGB(110, 110, 118));
 }
 
+static void DrawKeyCap(HDC dc, const std::wstring& s, int rightX, RECT row) {
+    if (s.empty()) return;
+    HFONT f = MakeFont(12);
+    HGDIOBJ of = SelectObject(dc, f);
+    SIZE sz = {0, 0};
+    GetTextExtentPoint32W(dc, s.c_str(), (int)s.size(), &sz);
+    int h = 18, padX = 7;
+    int cy = (row.top + row.bottom) / 2;
+    RECT b = { rightX - sz.cx - padX * 2, cy - h / 2, rightX, cy + h / 2 };
+    FillRound(dc, b, 4, RGB(46, 46, 51), RGB(74, 74, 82));
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(205, 210, 220));
+    DrawTextW(dc, s.c_str(), -1, &b, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
+    SelectObject(dc, of);
+    DeleteObject(f);
+}
+
 static bool IsPinnedItem(const Item& it) {
     std::wstring key = it.kind + L"|" + it.value;
     for (auto& k : g_pinned) if (k == key) return true;
@@ -989,23 +1158,24 @@ static void DrawResults(HDC dc) {
         int i = g_scroll + row;
         if (i >= (int)g_results.size()) break;
         RECT r = RowRect(row);
+        RECT fr = r; fr.bottom = r.top + 26;   // 整行（含行距），高亮无缝隙
         bool sel = (i == g_sel);
         bool hov = (i == g_hoverRow);
         // 普通行填面板色（看起来"无块"），hover 蓝、选中灰；再画 1px 描边
         {
             COLORREF fillc = hov ? RGB(58, 110, 168) : (sel ? RGB(70, 70, 74) : kPanelFill);
             HBRUSH fb = CreateSolidBrush(fillc);
-            FillRect(dc, &r, fb);
+            FillRect(dc, &fr, fb);
             DeleteObject(fb);
             // 行间 1px 极暗分隔线
             {
-                RECT sl = { r.left, r.bottom - 1, r.right, r.bottom };
+                RECT sl = { fr.left, fr.bottom - 1, fr.right, fr.bottom };
                 HBRUSH sb = CreateSolidBrush(RGB(42, 42, 45));
                 FillRect(dc, &sl, sb);
                 DeleteObject(sb);
             }
         }
-        if (sel) { RECT bar = { r.left, r.top, r.left + 4, r.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
+        if (sel) { RECT bar = { fr.left, fr.top, fr.left + 4, fr.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
 
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
@@ -1026,14 +1196,26 @@ static void DrawResults(HDC dc) {
 
         if (IsPinnedItem(g_results[i])) {
             SetTextColor(dc, RGB(255, 183, 77));
-            RECT pr2 = { r.right - 96, r.top, r.right - 62, r.bottom };
-            DrawTextW(dc, L"置顶", -1, &pr2, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+            RECT pr2 = { r.right - 92, r.top, r.right - 66, r.bottom };
+            {
+                HFONT pf = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                                        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                        DEFAULT_PITCH | FF_DONTCARE, L"Segoe MDL2 Assets");
+                HGDIOBJ po = SelectObject(dc, pf);
+                DrawTextW(dc, L"\uE718", -1, &pr2, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                SelectObject(dc, po);
+                DeleteObject(pf);
+            }
             SetTextColor(dc, RGB(210, 210, 210));
         }
         SetTextColor(dc, RGB(210, 210, 210));
         {
+            if ((g_results[i].kind == L"ops" && !g_results[i].key.empty()) || g_results[i].kind == L"keys") {
+                std::wstring hint = (g_results[i].kind == L"ops") ? g_results[i].key : g_results[i].value;
+                DrawKeyCap(dc, hint, r.right - 66, r);
+            }
             RECT tg = { r.right - 60, r.top, r.right - 8, r.bottom };
-            std::wstring tagv = (g_results[i].kind == L"script") ? L"脚本" : L"图层";
+            std::wstring tagv = (g_results[i].kind == L"script") ? L"脚本" : ((g_results[i].kind == L"keys" || g_results[i].kind == L"ops") ? L"操作" : L"图层");
             DrawTextW(dc, tagv.c_str(), -1, &tg, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
         }
 
@@ -1060,7 +1242,7 @@ static RECT SettingRowRect(int i) {
     r.left = p.left + 232;
     r.right = p.right - 16;
     r.top = p.top + 112 + i * 26;
-    r.bottom = r.top + 20;
+    r.bottom = r.top + 26;
     return r;
 }
 
@@ -1151,10 +1333,27 @@ static void DrawSettings(HDC dc) {
         HGDIOBJ of2 = SelectObject(dc, f);
         std::wstring label = std::wstring(dirs[i]) + L"   " +
                              (g_slots[i].used ? g_slots[i].name : L"（空）");
-        RECT tr2 = r; tr2.left += 12;
+        RECT tr2 = r; tr2.left += (g_slots[i].used && g_slots[i].kind == L"layer") ? 30 : 12;
         DrawTextW(dc, label.c_str(), -1, &tr2, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
         SelectObject(dc, of2);
         DeleteObject(f);
+    }
+    {   // 底部按钮：取消 / 确定
+        RECT p = PanelRect();
+        int bw = 76, bh = 26, gap = 10;
+        RECT okB = { p.right - 16 - bw, p.bottom - 16 - bh, p.right - 16, p.bottom - 16 };
+        RECT caB = { okB.left - gap - bw, okB.top, okB.left - gap, okB.bottom };
+        FillRound(dc, caB, 5, RGB(48, 48, 52), RGB(70, 70, 78));
+        FillRound(dc, okB, 5, RGB(58, 110, 168), RGB(70, 120, 180));
+        SetBkMode(dc, TRANSPARENT);
+        HFONT bf = MakeFont(13);
+        HGDIOBJ bo = SelectObject(dc, bf);
+        SetTextColor(dc, RGB(210, 214, 220));
+        DrawTextW(dc, L"取消", -1, &caB, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SetTextColor(dc, RGB(240, 245, 255));
+        DrawTextW(dc, L"确定", -1, &okB, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(dc, bo);
+        DeleteObject(bf);
     }
 }
 
@@ -1306,7 +1505,7 @@ static bool ParseHotkey(const std::wstring& spec, UINT& mods, UINT& vk) {
         if (low == L"shift")                     { mods |= MOD_SHIFT;   continue; }
         if (low == L"win")                       { mods |= MOD_WIN;     continue; }
         if (token == L"`") { vk = VK_OEM_3; continue; }   // 反引号
-        if (token == L" " || token == L"space") { vk = VK_SPACE; continue; }
+        if (low == L"space" || token == L" ") { vk = VK_SPACE; continue; }
         if (token.size() == 1) {
             wchar_t c = (wchar_t)towupper(token[0]);
             if ((c >= L'A' && c <= L'Z') || (c >= L'0' && c <= L'9')) { vk = (UINT)c; continue; }
@@ -1339,7 +1538,10 @@ static void LoadConfig() {
         if (line.rfind("hotkey=", 0) == 0) {
             std::wstring spec = Trim(Widen(line.substr(7)));
             UINT mods = 0, vk = 0;
-            if (ParseHotkey(spec, mods, vk)) {
+            std::wstring lowSpec = ToLower(spec);
+            if (lowSpec == L"off" || lowSpec == L"none" || spec.empty()) {
+                g_hotkeySpec = L"off"; g_hotkeyMods = 0; g_hotkeyVk = 0;
+            } else if (ParseHotkey(spec, mods, vk)) {
                 g_hotkeySpec = spec; g_hotkeyMods = mods; g_hotkeyVk = vk;
             }
             return;
@@ -1377,10 +1579,20 @@ static HWND g_msgWndGlobal = nullptr;
 static bool g_hotkeyOn = false;
 
 static void SetHotkeyEnabled(bool on) {
-    if (on == g_hotkeyOn || !g_msgWndGlobal) return;
-    if (on) RegisterHotKey(g_msgWndGlobal, 1, g_hotkeyMods, g_hotkeyVk);
-    else    UnregisterHotKey(g_msgWndGlobal, 1);
-    g_hotkeyOn = on;
+    if (!g_msgWndGlobal) return;
+    if (on) {
+        if (g_hotkeyOn) return;
+        if (RegisterHotKey(g_msgWndGlobal, 1, g_hotkeyMods, g_hotkeyVk)) {
+            g_hotkeyOn = true;
+            Log("hotkey registered");
+        } else {
+            Log("hotkey register FAILED err=" + std::to_string(GetLastError()));
+        }
+    } else {
+        if (!g_hotkeyOn) return;
+        UnregisterHotKey(g_msgWndGlobal, 1);
+        g_hotkeyOn = false;
+    }
 }
 static bool IsCavalryWindow(HWND h) {
     DWORD pid = 0;
@@ -1426,7 +1638,53 @@ static BOOL CALLBACK CavProbeProc(HWND h, LPARAM lp) {
 }
 
 // 每 tick 调用：Cavalry 没有"可见且未最小化"的窗口 → 收起热盒
-static HWND g_cavalryWnd = nullptr;   // 呼出热盒时 Cavalry 的前台窗口
+
+static bool OpenFolderViaPidl(const std::wstring& path) {
+    PIDLIST_ABSOLUTE pidl = nullptr;
+    if (FAILED(SHParseDisplayName(path.c_str(), nullptr, &pidl, 0, nullptr))) return false;
+    HRESULT hr = SHOpenFolderAndSelectItems(pidl, 0, nullptr, 0);
+    CoTaskMemFree(pidl);
+    return SUCCEEDED(hr);
+}
+
+static bool OpenFolderViaShell(const std::wstring& path) {
+    HRESULT hrInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    // 走 Explorer 自己的 COM 服务，避免受限进程直接拉 explorer.exe 失败
+    IDispatch* pShell = nullptr;
+    CLSID clsid;
+    if (FAILED(CLSIDFromProgID(L"Shell.Application", &clsid))) { if (SUCCEEDED(hrInit)) CoUninitialize(); return false; }
+    if (FAILED(CoCreateInstance(clsid, nullptr, CLSCTX_LOCAL_SERVER, IID_IDispatch, (void**)&pShell))) { if (SUCCEEDED(hrInit)) CoUninitialize(); return false; }
+    if (!pShell) return false;
+
+    LPOLESTR name = (LPOLESTR)L"ShellExecute";
+    DISPID dispid = 0;
+    bool ok = false;
+    if (SUCCEEDED(pShell->GetIDsOfNames(IID_NULL, &name, 1, LOCALE_USER_DEFAULT, &dispid))) {
+        VARIANT arg;
+        VariantInit(&arg);
+        arg.vt = VT_BSTR;
+        arg.bstrVal = SysAllocString(path.c_str());
+        DISPPARAMS dp = { &arg, nullptr, 1, 0 };
+        VARIANT res;
+        VariantInit(&res);
+        ok = SUCCEEDED(pShell->Invoke(dispid, IID_NULL, LOCALE_USER_DEFAULT, DISPATCH_METHOD, &dp, &res, nullptr, nullptr));
+        VariantClear(&res);
+        VariantClear(&arg);
+    }
+    pShell->Release();
+    if (SUCCEEDED(hrInit)) CoUninitialize();
+    return ok;
+}
+
+static std::string DescribeWindow(HWND h) {
+    if (!h) return "null";
+    wchar_t cls[128] = {0}; GetClassNameW(h, cls, 128);
+    DWORD pid = 0; GetWindowThreadProcessId(h, &pid);
+    std::string out = Narrow(cls) + "/" + std::to_string(pid);
+    return out;
+}
+static int g_focusRetry = 0;   // 显示后短暂抢焦点重试
+static DWORD g_shownTick = 0;
 
 static bool AnyCavalryVisible() {
     CavProbe pr = { false, false };
@@ -1435,19 +1693,20 @@ static bool AnyCavalryVisible() {
 }
 
 static void TickCavalryState(HWND hotbox) {
-    if (!g_cavalryWnd || !IsWindow(g_cavalryWnd)) g_cavalryWnd = nullptr;
-    bool alive = g_cavalryWnd ? true : AnyCavalryVisible();
-    bool hideNow = false;
-    if (!alive) hideNow = true;
-    else if (g_cavalryWnd && (IsIconic(g_cavalryWnd) || !IsWindowVisible(g_cavalryWnd))) hideNow = true;
-    if (hideNow && IsWindowVisible(hotbox)) {
-        // 直接关闭：不保留状态，下次呼出重新开始（不退出进程）
-        g_binding = false;
-        g_mode = M_PIE;
-        g_hover = -1;
-        SyncEditFromMode();
-        ShowWindow(hotbox, SW_HIDE);
+    // 只做一件事：热盒被别的窗口挡住时，把空格热键归还；露出来时再收回
+    if (!g_msgWndGlobal) return;
+    static bool spaceOn = false;
+    bool visible = IsWindowVisible(hotbox) != 0;
+    bool covered = true;
+    if (visible) {
+        RECT r; GetWindowRect(hotbox, &r);
+        POINT c = { (r.left + r.right) / 2, (r.top + r.bottom) / 2 };
+        HWND under = WindowFromPoint(c);
+        covered = !(under && (under == hotbox || GetAncestor(under, GA_ROOT) == hotbox));
     }
+    bool want = visible && !covered && (GetForegroundWindow() == hotbox);
+    if (want && !spaceOn) { RegisterHotKey(g_msgWndGlobal, 2, MOD_NOREPEAT, VK_SPACE); spaceOn = true; }
+    else if (!want && spaceOn) { UnregisterHotKey(g_msgWndGlobal, 2); spaceOn = false; }
 }
 
 
@@ -1492,7 +1751,22 @@ static void ForceForeground(HWND hwnd) {
     if (fgThread && fgThread != myThread) AttachThreadInput(fgThread, myThread, FALSE);
 }
 
+static void HideHotbox(HWND hwnd) {
+    // 先把界面复位成圆盘并画好，再隐藏：这样下次显示的第一帧就是圆盘，不会闪搜索面板
+    g_mode = M_PIE;
+    g_hover = -1;
+    g_query.clear();
+    SyncEditFromMode();
+    if (IsWindowVisible(hwnd)) {
+        InvalidateRect(hwnd, nullptr, TRUE);
+        UpdateWindow(hwnd);
+    }
+    ShowWindow(hwnd, SW_HIDE);
+}
+
 static void ShowAtCursor(HWND hwnd) {
+    bool cavFrontAtShow = IsCavalryWindow(GetForegroundWindow());   // 只有从 Cavalry 触发才抢焦点
+    if (IsWindowVisible(hwnd)) ShowWindow(hwnd, SW_HIDE);   // 先藏起来，避免旧画面（搜索面板）闪一下
     g_mode = M_PIE;
     { HWND fg0 = GetForegroundWindow(); if (fg0 && IsCavalryWindow(fg0)) g_cavalryWnd = fg0; }
     g_box = 0; g_mod = 0; LoadActive();   // 每次呼出都从"热盒1 · 无"开始
@@ -1515,9 +1789,22 @@ static void ShowAtCursor(HWND hwnd) {
     if (x + g_winW > work.right) x = work.right - g_winW;
     if (y + g_winH > work.bottom) y = work.bottom - g_winH;
 
-    SetWindowPos(hwnd, HWND_TOP, x, y, g_winW, g_winH, SWP_SHOWWINDOW);
+    g_shownTick = GetTickCount();
+    g_focusRetry = cavFrontAtShow ? 60 : 0;
+    // 先短暂置顶再取消：确保能盖住当前前台窗口，但之后仍可被其它窗口覆盖
+{ HDC dc0 = GetDC(hwnd); RECT rc0 = { 0, 0, g_winW, g_winH }; HBRUSH b0 = CreateSolidBrush(RGB(0,0,0)); FillRect(dc0, &rc0, b0); DeleteObject(b0); ReleaseDC(hwnd, dc0); }
+    InvalidateRect(hwnd, nullptr, TRUE);
+    UpdateWindow(hwnd);   // 先按"圆盘"画好，再显示
+    SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 1, LWA_COLORKEY | LWA_ALPHA);   // 先几乎透明，避免首帧残影
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, cavFrontAtShow ? SWP_SHOWWINDOW : (SWP_SHOWWINDOW | SWP_NOACTIVATE));
+    SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, g_winW, g_winH, 0);
+    InvalidateRect(hwnd, nullptr, TRUE);
+    UpdateWindow(hwnd);   // 显示后立刻补画一帧，抵消首帧残影
+    SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);   // 画好后再恢复不透明
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
-    ForceForeground(hwnd);
+    if (cavFrontAtShow) ForceForeground(hwnd);   // 非 Cavalry 触发：不抢焦点
+    if (g_edit) ShowWindow(g_edit, SW_HIDE);
+    RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
     InvalidateRect(hwnd, nullptr, TRUE);
 }
 
@@ -1588,9 +1875,33 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         {   // 仅当 Cavalry 或热盒自己在前台时才占用热键
             HWND fg = GetForegroundWindow();
             bool want = IsCavalryWindow(fg) || fg == hwnd || (g_main && fg == g_main) || (g_edit && fg == g_edit);
-            if (want != g_hotkeyOn) SetHotkeyEnabled(want);
+            // 保持常驻注册；是否响应在 WM_HOTKEY 里按前台判断
         }
         TickCavalryState(hwnd);
+        if (g_focusRetry > 0 && IsWindowVisible(hwnd)) {
+            --g_focusRetry;
+            HWND fgNow = GetForegroundWindow();
+            if (fgNow != hwnd && fgNow != g_edit) ForceForeground(hwnd);
+        }
+        {   // 触发器：Cavalry 脚本写文件 -> 呼出热盒（替代全局热键）
+            static wchar_t trig[MAX_PATH] = {0};
+            static FILETIME lastTrig = {0, 0};
+            if (!trig[0]) {
+                wchar_t* env = nullptr; size_t len = 0;
+                _wdupenv_s(&env, &len, L"TEMP");
+                if (env) { wcscpy_s(trig, env); wcscat_s(trig, L"\\CavalryShortCut.show"); free(env); }
+            }
+            WIN32_FILE_ATTRIBUTE_DATA fad = {};
+            bool cavThere = AnyCavalryVisible();
+            bool trigHit = cavThere && trig[0] && GetFileAttributesExW(trig, GetFileExInfoStandard, &fad) && CompareFileTime(&fad.ftLastWriteTime, &lastTrig) != 0;
+            if (trigHit) {
+                { HWND fgx = GetForegroundWindow(); Log(std::string("trigger hit, fg=") + DescribeWindow(fgx) + " cavFront=" + ((IsCavalryWindow(fgx) || IsWindowVisible(hwnd)) ? "1" : "0")); }
+                lastTrig = fad.ftLastWriteTime;
+                ShowAtCursor(hwnd);
+                Log(std::string("after show: vis=") + (IsWindowVisible(hwnd) ? "1" : "0") + " fg=" + DescribeWindow(GetForegroundWindow()));
+                InvalidateRect(hwnd, nullptr, TRUE);
+            }
+        }
         if (IsWindowVisible(hwnd) && g_mode == M_PIE) {
             if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) { ShowWindow(hwnd, SW_HIDE); return 0; }   // 右键取消
             POINT cp; GetCursorPos(&cp);
@@ -1807,8 +2118,29 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 return 0;
             }
             if (p.x >= fold.left && p.x < fold.right && p.y >= fold.top && p.y < fold.bottom) {
-                ShellExecuteW(nullptr, L"open", L"C:\\Windows\\explorer.exe", (L"\"" + ExeDir() + L"\\actions\"").c_str(), nullptr, SW_SHOWNORMAL);
-                return 0;
+                Log("folder icon hit");
+                {
+                    std::wstring dir = ExeDir() + L"\\actions";
+                    bool okPidl = OpenFolderViaPidl(dir);
+                    Log(std::string("open actions via PIDL -> ") + (okPidl ? "ok" : "fail"));
+                    bool okCom = okPidl ? true : OpenFolderViaShell(dir);
+                    Log(std::string("open actions via COM -> ") + (okCom ? "ok" : "fail"));
+                    HINSTANCE hr = okCom ? (HINSTANCE)42 : ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                    Log("open actions folder -> " + std::to_string((INT_PTR)hr));
+                    if (!okCom || (INT_PTR)hr <= 32) {
+                        if (OpenClipboard(nullptr)) {
+                            EmptyClipboard();
+                            size_t bytes = (dir.size() + 1) * sizeof(wchar_t);
+                            HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, bytes);
+                            if (mem) {
+                                void* dst = GlobalLock(mem);
+                                if (dst) { memcpy(dst, dir.c_str(), bytes); GlobalUnlock(mem); SetClipboardData(CF_UNICODETEXT, mem); }
+                            }
+                            CloseClipboard();
+                        }
+                    }
+                }
+                return 0;   // 命中文件夹后不再落到扇区判定
             }
         }
 
@@ -1860,6 +2192,19 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
         } else if (g_mode == M_SETTINGS) {
+            {
+                POINT mp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+                RECT p = PanelRect();
+                int bw = 76, bh = 26, gap = 10;
+                RECT okB = { p.right - 16 - bw, p.bottom - 16 - bh, p.right - 16, p.bottom - 16 };
+                RECT caB = { okB.left - gap - bw, okB.top, okB.left - gap, okB.bottom };
+                if (mp.x >= okB.left && mp.x < okB.right && mp.y >= okB.top && mp.y < okB.bottom) {
+                    SaveSectors(); HideHotbox(hwnd); return 0;
+                }
+                if (mp.x >= caB.left && mp.x < caB.right && mp.y >= caB.top && mp.y < caB.bottom) {
+                    LoadSectors(); HideHotbox(hwnd); return 0;
+                }
+            }
             {   // 右上角 × ：关闭设置页
                 RECT xr = IconRect(0);
                 if (p.x >= xr.left - 6 && p.x < xr.right + 6 && p.y >= xr.top - 6 && p.y < xr.bottom + 6) {
@@ -1978,10 +2323,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (wp == VK_MENU)    { SwitchSet(g_box, (g_mod == 3) ? 0 : 3); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         }
         if (wp == VK_ESCAPE) {
+            if (g_mode == M_SETTINGS) { HideHotbox(hwnd); return 0; }   // 设置页 Esc 直接关闭
             if (g_binding) { g_binding = false; ShowWindow(hwnd, SW_HIDE); return 0; }
             if (g_mode == M_SEARCH && g_bindSlot >= 0) { g_mode = M_SETTINGS; g_bindSlot = -1; }
             else if (g_mode != M_PIE) { g_mode = M_PIE; }
-            else ShowWindow(hwnd, SW_HIDE);
+            else { HideHotbox(hwnd); }
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
         }
@@ -2011,6 +2357,19 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             if (wp == VK_RETURN) { ExecSelected(); return 0; }
         } else if (g_mode == M_SETTINGS) {
+            {
+                POINT mp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+                RECT p = PanelRect();
+                int bw = 76, bh = 26, gap = 10;
+                RECT okB = { p.right - 16 - bw, p.bottom - 16 - bh, p.right - 16, p.bottom - 16 };
+                RECT caB = { okB.left - gap - bw, okB.top, okB.left - gap, okB.bottom };
+                if (mp.x >= okB.left && mp.x < okB.right && mp.y >= okB.top && mp.y < okB.bottom) {
+                    SaveSectors(); HideHotbox(hwnd); return 0;
+                }
+                if (mp.x >= caB.left && mp.x < caB.right && mp.y >= caB.top && mp.y < caB.bottom) {
+                    LoadSectors(); HideHotbox(hwnd); return 0;
+                }
+            }
             if (wp == VK_DOWN) { if (g_sel < 7) ++g_sel; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
             if (wp == VK_UP)   { if (g_sel > 0) --g_sel; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
             if (wp == VK_RETURN) { g_bindSlot = g_sel; EnterSearch(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
@@ -2058,6 +2417,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         ShowAtCursor(hwnd);
         return 0;
     case WM_HOTKEY:
+        Log("WM_HOTKEY id=" + std::to_string((int)wp));
+        { HWND fgc = GetForegroundWindow(); if (!IsCavalryWindow(fgc) && !IsWindowVisible((HWND)(g_main ? g_main : hwnd))) return 0; }
+        if (wp == 2) { PostMessageW(hwnd, WM_APP + 7, 0, 0); return 0; }   // 空格确认
         if (wp == HOTKEY_TOGGLE) {
             HWND target = g_main ? g_main : hwnd;
             bool visible = IsWindowVisible(target);
@@ -2096,6 +2458,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 // ---------------------------------------------------------------- 入口
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
+    bool showOnStart = (cmdLine && wcsstr(cmdLine, L"--show") != 0);
     {   // 单实例：已有实例则退出（避免多份窗口抢热键）
         HANDLE mtx = CreateMutexW(nullptr, TRUE, L"CavalryShortCut_Single");
         if (mtx && GetLastError() == ERROR_ALREADY_EXISTS) {
@@ -2134,6 +2497,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     InitIcons();
     LoadConfig();
     LoadIndex();
+    LoadOps();
     {
         std::string raw = ReadFileUtf8(ExeDir() + L"\\Cavalry_ShortCut_pinned.txt");
         size_t st = 0;
@@ -2151,9 +2515,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     HWND msgWnd = CreateWindowExW(0, L"CavalryShortCut", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, inst, nullptr);
     g_msgWndGlobal = msgWnd;
     BOOL hk = TRUE;   // 热键改为按需注册（仅 Cavalry 前台）
+    if (g_hotkeyVk != 0) SetHotkeyEnabled(true);   // hotkey=off 时不注册（脚本呼出）
     Log("hotkey " + Narrow(g_hotkeySpec) + " -> " + (hk ? "ok" : ("FAIL err=" + std::to_string(GetLastError()))));
 
     SetTimer(hwnd, 1, 5, nullptr);   // 5ms
+    if (showOnStart) PostMessageW(hwnd, WM_APP + 1, 0, 0);
 
     WNDCLASSW cc = {};
     cc.lpfnWndProc = CatcherProc;
