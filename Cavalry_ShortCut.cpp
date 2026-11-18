@@ -437,6 +437,7 @@ static void EnsurePreamble() {
 }
 
 static void RunScriptText(const std::string& script) {
+    if (script.size() < 400) Log("script: " + script);
     if (script.empty()) return;
     std::string body = "{\"name\":\"execute_script\",\"args\":{\"script\":\"" + EscapeJson(script) + "\"}}";
     std::string out;
@@ -451,7 +452,7 @@ static void RunScriptText(const std::string& script) {
         return;
     }
     else Log("ran script (" + std::to_string(script.size()) + " bytes) -> " +
-             (out.find("\"isError\":false") != std::string::npos ? "ok" : "error"));
+             (out.find("\"isError\":false") != std::string::npos ? "ok" : "error") + " | " + out.substr(0, out.size() < 120 ? out.size() : 120));
 }
 
 static std::wstring Trim(const std::wstring& s);
@@ -997,13 +998,14 @@ static void DrawPie(HDC dc) {
                 RECT ib = { r.left + 8, cy0 - 8, r.left + 24, cy0 + 8 };
                 if (g_slots[i].kind == L"layer") DrawIcon(dc, g_slots[i].value, ib);
                 else if (g_slots[i].used) {
-                    HFONT gf = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                    HFONT gf = CreateFontW(11, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                                             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                                            DEFAULT_PITCH | FF_DONTCARE, L"Segoe MDL2 Assets");
+                                            DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
                     HGDIOBJ go2 = SelectObject(dc, gf);
                     SetTextColor(dc, RGB(150, 155, 165));
-                    const wchar_t* glyph = (g_slots[i].kind == L"ops") ? L"\uE8EF" : L"\uE943";
-                    DrawTextW(dc, glyph, -1, &ib, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
+                    const wchar_t* badge = (g_slots[i].kind == L"ops") ? L"OP" : L"JS";
+                    SetTextColor(dc, RGB(150, 155, 165));
+                    DrawTextW(dc, badge, -1, &ib, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
                     SelectObject(dc, go2);
                     DeleteObject(gf);
                 }
