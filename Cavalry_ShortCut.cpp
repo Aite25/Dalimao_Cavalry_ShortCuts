@@ -1091,7 +1091,8 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
     HFONT ft = MakeFont(13);
     HGDIOBJ of = SelectObject(dc, ft);
     SetTextColor(dc, RGB(140, 140, 140));
-    RECT tr = { p.left + 16, p.top + 10, p.right - 16, p.top + 30 };
+    DrawPieTabs(dc);
+    RECT tr = { p.left + 16, p.top + 88, p.right - 16, p.top + 108 };
     DrawTextW(dc, title.c_str(), -1, &tr, DT_LEFT | DT_SINGLELINE);
     SelectObject(dc, of);
     DeleteObject(ft);
@@ -1302,13 +1303,14 @@ static void DrawSettings(HDC dc) {
     HFONT ft = MakeFont(13);
     HGDIOBJ of = SelectObject(dc, ft);
     SetTextColor(dc, RGB(140, 140, 140));
-    RECT tr = { p.left + 16, p.top + 10, p.right - 16, p.top + 30 };
+    DrawPieTabs(dc);
+    RECT tr = { p.left + 16, p.top + 88, p.right - 16, p.top + 108 };
     DrawTextW(dc, L"设置 —— 点一行修改绑定（Delete 清除，Esc 返回）", -1, &tr, DT_LEFT | DT_SINGLELINE);
     SelectObject(dc, of);
     DeleteObject(ft);
 
     // 左侧：迷你圆盘预览
-    RECT pv = { p.left + 16, p.top + 44, p.left + 216, p.top + 250 };
+    RECT pv = { p.left + 16, p.top + 120, p.left + 216, p.top + 326 };
     DrawMiniPie(dc, pv, g_sel);
     {   // 右上角关闭按钮
         RECT xr = IconRect(0);
@@ -1338,7 +1340,7 @@ static void DrawSettings(HDC dc) {
         HGDIOBJ o2 = SelectObject(dc, f2);
         const wchar_t* mods2[4] = { L"无", L"Ctrl", L"Shift", L"Alt" };
         std::wstring gt = L"热盒 " + std::to_wstring(g_box + 1) + L" · " + mods2[g_mod] + L"     Ctrl+1~4 切热盒 · Ctrl/Shift/Alt 切版本";
-        RECT gr = { p.left + 16, p.top + 44, p.right - 16, p.top + 68 };
+        RECT gr = { p.left + 16, p.top + 88, p.right - 16, p.top + 110 };
         DrawTextW(dc, gt.c_str(), -1, &gr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         SelectObject(dc, o2);
         DeleteObject(f2);
@@ -2139,6 +2141,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             InflateRect(&gear, 10, 14);
             InflateRect(&fold, 10, 14);
             if (p.x >= gear.left && p.x < gear.right && p.y >= gear.top && p.y < gear.bottom) {
+                Log("gear hit");
                 g_mode = M_SETTINGS;
                 g_sel = 0;
                 InvalidateRect(hwnd, nullptr, TRUE);
@@ -2219,6 +2222,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
         } else if (g_mode == M_SETTINGS) {
+            {   // 页签点击（与圆盘一致）
+                POINT tp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+                for (int i = 0; i < 4; ++i) {
+                    RECT br = TabBoxRect(i);
+                    if (tp.x >= br.left && tp.x < br.right && tp.y >= br.top && tp.y < br.bottom) { SaveActive(); SwitchSet(i, g_mod); LoadActive(); g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+                    RECT mr = TabModRect(i);
+                    if (tp.x >= mr.left && tp.x < mr.right && tp.y >= mr.top && tp.y < mr.bottom) { SaveActive(); SwitchSet(g_box, i); LoadActive(); g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+                }
+            }
             {
                 POINT mp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
                 RECT p = PanelRect();
@@ -2384,6 +2396,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             if (wp == VK_RETURN) { ExecSelected(); return 0; }
         } else if (g_mode == M_SETTINGS) {
+            {   // 页签点击（与圆盘一致）
+                POINT tp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+                for (int i = 0; i < 4; ++i) {
+                    RECT br = TabBoxRect(i);
+                    if (tp.x >= br.left && tp.x < br.right && tp.y >= br.top && tp.y < br.bottom) { SaveActive(); SwitchSet(i, g_mod); LoadActive(); g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+                    RECT mr = TabModRect(i);
+                    if (tp.x >= mr.left && tp.x < mr.right && tp.y >= mr.top && tp.y < mr.bottom) { SaveActive(); SwitchSet(g_box, i); LoadActive(); g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+                }
+            }
             {
                 POINT mp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
                 RECT p = PanelRect();
