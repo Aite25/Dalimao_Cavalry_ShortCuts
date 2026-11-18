@@ -1389,7 +1389,7 @@ static void DrawResults(HDC dc) {
 static RECT SettingOptRect(int i) {
     RECT p = PanelRect();
     RECT r;
-    r.left = p.left + 340;
+    r.left = p.left + 330;
     r.right = p.right - 16;
     r.top = p.top + 132 + i * 34;
     r.bottom = r.top + 28;
@@ -1440,9 +1440,9 @@ static void DrawMiniPie(HDC dc, RECT area, int sel) {
 }
 static RECT SetRingRect(int i) {
     RECT p = PanelRect();
-    int cx = p.left + 175, cy = p.top + 300;
+    int cx = p.left + 145, cy = p.top + 300;
     int ox = 0, oy = 0;
-    const double s = 0.60;   // 与真实热盒同一套偏移，等比缩小
+    const double s = 0.52;   // 与真实热盒同一套偏移，等比缩小
     const int dx = (int)(kOffDiagX * s), dy = (int)(kOffVert * s);
     const int ddx = (int)(kOffDiagX * s), ddy = (int)(kOffDiagY * s);
     switch (i) {
@@ -1465,20 +1465,20 @@ static RECT SetRingRect(int i) {
 
 static RECT SetHotkeyRect() {
     RECT p = PanelRect();
-    RECT r = { p.left + 40, p.top + 400, p.left + 310, p.top + 430 };
+    RECT r = { p.left + 40, p.top + 392, p.left + 300, p.top + 422 };
     return r;
 }
 
 static RECT SetInputRect() {
     RECT p = PanelRect();
-    RECT r = { p.left + 340, p.top + 112, p.right - 16, p.top + 144 };
+    RECT r = { p.left + 330, p.top + 112, p.right - 16, p.top + 144 };
     return r;
 }
 
 static RECT SetResultRect(int row) {
     RECT p = PanelRect();
     RECT r;
-    r.left = p.left + 340;
+    r.left = p.left + 330;
     r.right = p.right - 16;
     r.top = p.top + 152 + row * 28;
     r.bottom = r.top + 28;
@@ -1540,9 +1540,11 @@ static void DrawSettings(HDC dc) {
         HGDIOBJ oh = SelectObject(dc, fh);
         SetTextColor(dc, RGB(205, 208, 215));
         RECT lt = hk; lt.left += 12; lt.right -= 150;
-        DrawTextW(dc, L"呼出快捷键", -1, &lt, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        static const wchar_t* dnames[8] = { L"N", L"NE", L"E", L"SE", L"S", L"SW", L"W", L"NW" };
+        std::wstring kl = std::wstring(L"扇区快捷键（") + dnames[g_sel] + L"）";
+        DrawTextW(dc, kl.c_str(), -1, &lt, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         SetTextColor(dc, g_captureHotkey ? RGB(120, 200, 255) : RGB(255, 210, 120));
-        std::wstring hv = g_captureHotkey ? std::wstring(L"按下按键…") : (g_hotkeySpec.empty() ? std::wstring(L"未设置") : g_hotkeySpec);
+        std::wstring hv = g_captureHotkey ? std::wstring(L"按下按键…") : (g_slots[g_sel].key.empty() ? std::wstring(L"未设置") : g_slots[g_sel].key);
         RECT vt = hk; vt.left = hk.right - 150; vt.right -= 10;
         DrawTextW(dc, hv.c_str(), -1, &vt, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
         SelectObject(dc, oh);
@@ -1553,7 +1555,7 @@ static void DrawSettings(HDC dc) {
         HGDIOBJ of = SelectObject(dc, ft);
         SetTextColor(dc, RGB(170, 175, 185));
         static const wchar_t* dirs2[8] = { L"N", L"NE", L"E", L"SE", L"S", L"SW", L"W", L"NW" };
-        RECT hr = { p.left + 340, p.top + 86, p.right - 16, p.top + 108 };
+        RECT hr = { p.left + 330, p.top + 86, p.right - 16, p.top + 108 };
         std::wstring ht = L"搜索并绑定到 " + std::wstring(dirs2[g_sel]);
         if (g_slots[g_sel].used) ht += L"（当前：" + g_slots[g_sel].name + L"）";
         DrawTextW(dc, ht.c_str(), -1, &hr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
@@ -2776,16 +2778,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (vk == VK_CONTROL || vk == VK_SHIFT || vk == VK_MENU || vk == VK_ESCAPE) { g_captureHotkey = false; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
             std::wstring nm = VkNameFromVk(vk);
             if (!nm.empty()) {
-                std::wstring spec;
-                if (GetKeyState(VK_CONTROL) & 0x8000) spec += L"Ctrl+";
-                if (GetKeyState(VK_SHIFT) & 0x8000) spec += L"Shift+";
-                if (GetKeyState(VK_MENU) & 0x8000) spec += L"Alt+";
-                spec += nm;
-                g_hotkeySpec = spec;
+                std::wstring spec = nm;   // 扇区快捷键：单个键
+                g_slots[g_sel].key = spec;
                 g_captureHotkey = false;
-                LoadConfig();
-                SetHotkeyEnabled(true);
-                Log("captured hotkey " + Narrow(g_hotkeySpec));
+                SaveSectors();
+                Log("captured sector key " + Narrow(spec));
                 InvalidateRect(hwnd, nullptr, TRUE);
             }
             return 0;
