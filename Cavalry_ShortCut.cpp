@@ -1534,7 +1534,8 @@ static void DrawSettings(HDC dc) {
         HFONT fc = MakeFont(12);
         HGDIOBJ oc = SelectObject(dc, fc);
         SetTextColor(dc, RGB(130, 134, 142));
-        RECT cr = { cx - 80, cy - 12, cx + 80, cy + 12 };
+        RECT pp2 = PanelRect(); int ccx = pp2.left + 250, ccy = pp2.top + 290;
+        RECT cr = { ccx - 80, ccy - 12, ccx + 80, ccy + 12 };
         const wchar_t* mods2[4] = { L"无", L"Ctrl", L"Shift", L"Alt" };
         std::wstring ctr = L"热盒 " + std::to_wstring(g_box + 1) + L" · " + mods2[g_mod];
         DrawTextW(dc, ctr.c_str(), -1, &cr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
