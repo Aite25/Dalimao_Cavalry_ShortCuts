@@ -1009,8 +1009,8 @@ static void DrawPie(HDC dc) {
         int dcSaved = SaveDC(dc);   // GDI+ 会改 DC 状态，用完恢复
         Gdiplus::Graphics g(dc);
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        Gdiplus::SolidBrush ffill(Gdiplus::Color(255, 38, 38, 38));
-        Gdiplus::Pen bborder(Gdiplus::Color(255, 31, 31, 31), 2.0f);
+        Gdiplus::SolidBrush ffill(Gdiplus::Color(255, 43, 43, 46));
+        Gdiplus::Pen bborder(Gdiplus::Color(255, 62, 62, 68), 1.5f);
         g.FillEllipse(&ffill, cx - kCenterR, cy - kCenterR, kCenterR * 2, kCenterR * 2);
         g.DrawEllipse(&bborder, cx - kCenterR, cy - kCenterR, kCenterR * 2, kCenterR * 2);
 
@@ -1019,12 +1019,12 @@ static void DrawPie(HDC dc) {
             double dx = (r.left + r.right) / 2.0 - cx;
             double dy = (r.top + r.bottom) / 2.0 - cy;
             double angDeg = atan2(dy, dx) * 180.0 / 3.14159265358979;
-            int ar = kCenterR - 8;
-            Gdiplus::Pen arcPen(Gdiplus::Color(255, 56, 119, 181), 3.0f);
+            int ar = kCenterR + 2;   // 弧线压在圆环外沿（AE 风格）
+            Gdiplus::Pen arcPen(Gdiplus::Color(255, 90, 155, 232), 4.0f);
             arcPen.SetStartCap(Gdiplus::LineCapRound);
             arcPen.SetEndCap(Gdiplus::LineCapRound);
             g.DrawArc(&arcPen, (REAL)(cx - ar), (REAL)(cy - ar), (REAL)(ar * 2), (REAL)(ar * 2),
-                      (REAL)(angDeg - 28.0), (REAL)56.0);
+                      (REAL)(angDeg - 26.0), (REAL)52.0);
         }
         RestoreDC(dc, dcSaved);
     }
