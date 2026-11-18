@@ -3,11 +3,11 @@
     [
       {"name":"出点=当前帧（裁剪尾部）", "kind":"ops", "value":"op:9", "key":"1"},
       {"name":"Math", "kind":"script", "value":"Math.js", "key":"2"},
-      {"name":"Number Range", "kind":"script", "value":"Number Range.js", "key":"3"},
+      {"name":"整体移动：出点对齐播放头（Move Out）", "kind":"ops", "value":"op:3", "key":"3"},
       {"name":"", "kind":"script", "value":"", "key":""},
+      {"name":"出点=当前帧（裁剪尾部）", "kind":"ops", "value":"op:9", "key":"5"},
       {"name":"", "kind":"script", "value":"", "key":""},
-      {"name":"", "kind":"script", "value":"", "key":""},
-      {"name":"", "kind":"script", "value":"", "key":""},
+      {"name":"整体移动：入点对齐播放头（Move In）", "kind":"ops", "value":"op:2", "key":"7"},
       {"name":"Stagger", "kind":"layer", "value":"stagger", "key":"8"}
     ],
     [
