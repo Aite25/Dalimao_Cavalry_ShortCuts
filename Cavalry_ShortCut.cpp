@@ -555,6 +555,8 @@ static void LoadOps() {
         { L"下一帧",                  L"Right",  L"op_next_frame.js" },
         { L"跳到起点",                L"Home",   L"op_goto_start.js" },
         { L"跳到当前图层出点",        L"End",    L"op_goto_layer_out.js" },
+        { L"整体移动：入点对齐播放头（Move In）",  L"",  L"op_move_in.js" },
+        { L"整体移动：出点对齐播放头（Move Out）", L"",  L"op_move_out.js" },
     };
     for (auto& o : ops) {
         Item it;
