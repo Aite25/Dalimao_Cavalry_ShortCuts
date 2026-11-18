@@ -128,6 +128,7 @@ static void UpdateResults();
 static POINT g_dragOffset = {0, 0};
 
 static std::vector<Item> g_results;
+static RECT SetInputRect();
 static void SyncEditFromMode();
 static void UpdateScrollInfo();
 static int g_tab = 0;
@@ -137,6 +138,7 @@ static int g_tabOrder[kTabCount] = { 0, 1, 2, 3, 4, 5, 6 };   // 显示位置 ->
 static int g_tabDragFrom = -1;   // 拖拽起点（位置）
 static bool g_captureHotkey = false;   // 设置页正在捕获快捷键
 static int g_searchRows = 0;   // 0 = 自动（按窗口高度算）
+static int g_selSearch = 0;
 static HWND g_edit = nullptr;
 static HWND g_editHost = nullptr;
 static HWND g_scrollbar = nullptr;
@@ -643,6 +645,7 @@ static void RunItem(const Item& it) {
     }).detach();
 }
 
+static RECT SetInputRect();
 static void SyncEditFromMode();
 static void UpdateScrollInfo();
 
@@ -714,6 +717,16 @@ static void CreateEdit(HWND parent, HINSTANCE inst) {
 
 static RECT InputRect();
 static void SyncEditFromMode() {
+    if (g_mode == M_SETTINGS) {   // 设置页：输入框放在右侧搜索框
+        RECT sr = SetInputRect();
+        RECT wr2; GetWindowRect(g_main, &wr2);
+        int ew2 = sr.right - sr.left - 16, eh2 = sr.bottom - sr.top - 8;
+        SetWindowPos(g_editHost, HWND_TOP, wr2.left + kPadX + sr.left + 8, wr2.top + kPadY + sr.top + 4,
+                     ew2, eh2, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+        SetWindowPos(g_edit, nullptr, 0, 0, ew2, eh2, SWP_NOMOVE | SWP_NOZORDER | SWP_SHOWWINDOW);
+        SetFocus(g_edit);
+        return;
+    }
     if (!g_edit || !g_editHost) return;
     if (g_mode == M_SEARCH) {
         RECT ir = InputRect();
@@ -1376,7 +1389,7 @@ static void DrawResults(HDC dc) {
 static RECT SettingOptRect(int i) {
     RECT p = PanelRect();
     RECT r;
-    r.left = p.left + 320;
+    r.left = p.left + 340;
     r.right = p.right - 16;
     r.top = p.top + 132 + i * 34;
     r.bottom = r.top + 28;
@@ -1425,21 +1438,53 @@ static void DrawMiniPie(HDC dc, RECT area, int sel) {
         DeleteObject(f);
     }
 }
+static RECT SetRingRect(int i) {
+    RECT p = PanelRect();
+    int cx = p.left + 160, cy = p.top + 290;
+    int ox = 0, oy = 0;
+    const int dx = 96, dy = 56, ddx = 70, ddy = 46;
+    switch (i) {
+        case 0: oy = -dy; break;
+        case 1: ox = ddx; oy = -ddy; break;
+        case 2: ox = dx; break;
+        case 3: ox = ddx; oy = ddy; break;
+        case 4: oy = dy; break;
+        case 5: ox = -ddx; oy = ddy; break;
+        case 6: ox = -dx; break;
+        case 7: ox = -ddx; oy = -ddy; break;
+    }
+    RECT r;
+    r.left = cx + ox - 46;
+    r.right = cx + ox + 46;
+    r.top = cy + oy - 12;
+    r.bottom = cy + oy + 12;
+    return r;
+}
+
+static RECT SetInputRect() {
+    RECT p = PanelRect();
+    RECT r = { p.left + 340, p.top + 112, p.right - 16, p.top + 144 };
+    return r;
+}
+
+static RECT SetResultRect(int row) {
+    RECT p = PanelRect();
+    RECT r;
+    r.left = p.left + 340;
+    r.right = p.right - 16;
+    r.top = p.top + 152 + row * 28;
+    r.bottom = r.top + 28;
+    return r;
+}
+
 static void DrawSettings(HDC dc) {
     RECT p = PanelRect();
     FillRound(dc, p, 14, kPanelFill, kPanelBorder);
-
-        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
+    SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr);
     SetBkMode(dc, TRANSPARENT);
-    HFONT ft = MakeFont(15);
-    HGDIOBJ of = SelectObject(dc, ft);
-    SetTextColor(dc, RGB(140, 140, 140));
     DrawPieTabs(dc);
-    SelectObject(dc, of);
-    DeleteObject(ft);
 
-    // 左侧：迷你圆盘预览
-    {   // 右上角关闭按钮
+    {   // 右上角：关闭
         RECT xr = IconRect(0);
         HPEN pen = CreatePen(PS_SOLID, 1, RGB(180, 180, 185));
         HGDIOBJ op = SelectObject(dc, pen);
@@ -1449,100 +1494,100 @@ static void DrawSettings(HDC dc) {
         DeleteObject(pen);
     }
 
-        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
-    SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, RGB(150, 150, 150));
-    HFONT fp = MakeFont(12);
-    HGDIOBJ opf = SelectObject(dc, fp);
-    {   // 顶部：当前组提示
-        RECT p = PanelRect();
-        SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, RGB(170, 175, 185));
-        HFONT f2 = MakeFont(13);
-        HGDIOBJ o2 = SelectObject(dc, f2);
-        const wchar_t* mods2[4] = { L"无", L"Ctrl", L"Shift", L"Alt" };
-        std::wstring gt = L"热盒 " + std::to_wstring(g_box + 1) + L" · " + mods2[g_mod] + L"     Ctrl+1~4 切热盒 · Ctrl/Shift/Alt 切版本";
-        RECT gr = { p.left + 16, p.top + 88, p.right - 16, p.top + 110 };
-        DrawTextW(dc, gt.c_str(), -1, &gr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-        SelectObject(dc, o2);
-        DeleteObject(f2);
-    }
-    static const wchar_t* dirs[8] = { L"N", L"NE", L"E", L"SE", L"S", L"SW", L"W", L"NW" };
-    for (int i = 0; i < 8; ++i) {
-        RECT r = SettingRowRect(i);
-        bool sel = (i == g_sel);
-        bool hov = (i == g_hoverRow);
-        // 只画描边，不填充：hover=蓝框，选中=浅灰框，其余=暗淡框
-        {
-        }
-        if (sel) { RECT bar = { r.left, r.top, r.left + 4, r.bottom }; HBRUSH bb2 = CreateSolidBrush(kRowSel); FillRect(dc, &bar, bb2); DeleteObject(bb2); }
-
-        SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
-        SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, kText);
-        HFONT f = MakeFont(17);
-        HGDIOBJ of2 = SelectObject(dc, f);
-        std::wstring label = std::wstring(dirs[i]) + L"   " +
-                             (g_slots[i].used ? g_slots[i].name : L"（空）");
-        RECT tr2 = r; tr2.left += (g_slots[i].used && g_slots[i].kind == L"layer") ? 30 : 12;
-        DrawTextW(dc, label.c_str(), -1, &tr2, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-        SelectObject(dc, of2);
-        DeleteObject(f);
-    }
-    {   // 右侧：热盒选项
-        RECT p = PanelRect();
-        SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, RGB(150, 155, 165));
-        HFONT fo = MakeFont(13);
-        HGDIOBJ oo = SelectObject(dc, fo);
-        RECT hr0 = { p.left + 16, p.top + 108, p.left + 300, p.top + 128 };
-        DrawTextW(dc, L"扇区绑定", -1, &hr0, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-        RECT hr1 = { p.left + 320, p.top + 108, p.right - 16, p.top + 128 };
-        DrawTextW(dc, L"热盒设置", -1, &hr1, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-        SelectObject(dc, oo);
-        DeleteObject(fo);
-
-        const wchar_t* labels[2] = { L"呼出快捷键", L"重置页签顺序" };
-        std::wstring vals[2];
-        vals[0] = g_captureHotkey ? std::wstring(L"按下按键…") : (g_hotkeySpec.empty() ? L"未设置" : g_hotkeySpec);
-        vals[1] = L"点击恢复默认";
-        for (int oi = 0; oi < 2; ++oi) {
-            RECT r = SettingOptRect(oi);
-            FillRound(dc, r, 6, RGB(34, 34, 38), RGB(62, 62, 68));
+    {   // 左：8 个环状热盒
+        static const wchar_t* dirs[8] = { L"N", L"NE", L"E", L"SE", L"S", L"SW", L"W", L"NW" };
+        HFONT f = MakeFont(14);
+        for (int i = 0; i < 8; ++i) {
+            RECT r = SetRingRect(i);
+            bool sel = (i == g_sel);
+            COLORREF fillc = sel ? RGB(58, 92, 150) : RGB(42, 42, 46);
+            COLORREF bordc = sel ? RGB(96, 150, 220) : RGB(64, 64, 70);
+            FillRound(dc, r, 6, fillc, bordc);
+            HGDIOBJ of = SelectObject(dc, f);
             SetBkMode(dc, TRANSPARENT);
-            SetTextColor(dc, RGB(205, 208, 215));
-            HFONT f1 = MakeFont(15);
-            HGDIOBJ o1 = SelectObject(dc, f1);
-            RECT lt = r; lt.left += 12; lt.right -= 150;
-            DrawTextW(dc, labels[oi], -1, &lt, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-            SetTextColor(dc, oi == 0 ? RGB(255, 210, 120) : RGB(150, 155, 165));
-            RECT vt = r; vt.left = r.right - 150; vt.right -= 10;
-            DrawTextW(dc, vals[oi].c_str(), -1, &vt, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-            SelectObject(dc, o1);
-            DeleteObject(f1);
+            SetTextColor(dc, g_slots[i].used ? RGB(225, 228, 235) : RGB(140, 143, 150));
+            RECT tr = r; tr.left += 10; tr.right -= 6;
+            std::wstring label = std::wstring(dirs[i]) + L"  " + (g_slots[i].used ? g_slots[i].name : L"（空）");
+            DrawTextW(dc, label.c_str(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+            SelectObject(dc, of);
+        }
+        DeleteObject(f);
+        // 中心提示
+        HFONT fc = MakeFont(12);
+        HGDIOBJ oc = SelectObject(dc, fc);
+        SetTextColor(dc, RGB(130, 134, 142));
+        RECT cr = { p.left + 80, p.top + 276, p.left + 240, p.top + 300 };
+        const wchar_t* mods2[4] = { L"无", L"Ctrl", L"Shift", L"Alt" };
+        std::wstring ctr = L"热盒 " + std::to_wstring(g_box + 1) + L" · " + mods2[g_mod];
+        DrawTextW(dc, ctr.c_str(), -1, &cr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(dc, oc);
+        DeleteObject(fc);
+    }
+
+    {   // 右：搜索 + 结果（点击即绑定到左侧选中的扇区）
+        HFONT ft = MakeFont(14);
+        HGDIOBJ of = SelectObject(dc, ft);
+        SetTextColor(dc, RGB(170, 175, 185));
+        static const wchar_t* dirs2[8] = { L"N", L"NE", L"E", L"SE", L"S", L"SW", L"W", L"NW" };
+        RECT hr = { p.left + 340, p.top + 86, p.right - 16, p.top + 108 };
+        std::wstring ht = L"搜索并绑定到 " + std::wstring(dirs2[g_sel]);
+        if (g_slots[g_sel].used) ht += L"（当前：" + g_slots[g_sel].name + L"）";
+        DrawTextW(dc, ht.c_str(), -1, &hr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        SelectObject(dc, of);
+        DeleteObject(ft);
+
+        RECT ir = SetInputRect();
+        FillRound(dc, ir, 8, RGB(22, 22, 24), RGB(80, 80, 84));
+
+        // 结果
+        int rows = (p.bottom - 40 - SetResultRect(0).top) / 28;
+        if (rows > 12) rows = 12;
+        HFONT fr = MakeFont(15);
+        for (int row = 0; row < rows; ++row) {
+            int idx = g_scroll + row;
+            if (idx >= (int)g_results.size()) break;
+            RECT r = SetResultRect(row);
+            if (idx == g_selSearch) { FillRound(dc, r, 5, RGB(52, 84, 136), RGB(70, 110, 170)); }
+            of = SelectObject(dc, fr);
+            SetBkMode(dc, TRANSPARENT);
+            SetTextColor(dc, RGB(225, 228, 235));
+            RECT tr = r; tr.left += 10; tr.right -= 80;
+            DrawTextW(dc, g_results[idx].name.c_str(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+            SetTextColor(dc, RGB(140, 144, 152));
+            RECT tg = r; tg.left = r.right - 76; tg.right -= 8;
+            std::wstring tagv = (g_results[idx].kind == L"script") ? L"脚本" : ((g_results[idx].kind == L"keys" || g_results[idx].kind == L"ops") ? L"操作" : L"图层");
+            DrawTextW(dc, tagv.c_str(), -1, &tg, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(dc, of);
+        }
+        DeleteObject(fr);
+        if (g_results.empty()) {
+            HFONT fe = MakeFont(14);
+            of = SelectObject(dc, fe);
+            SetTextColor(dc, RGB(120, 124, 132));
+            RECT er = { p.left + 330, p.top + 160, p.right - 20, p.top + 190 };
+            DrawTextW(dc, L"没有匹配项", -1, &er, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(dc, of);
+            DeleteObject(fe);
         }
     }
-    {   // 底部操作提示
-        RECT p2 = PanelRect();
-        SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, RGB(120, 124, 132));
+
+    {   // 底部：提示 + 按钮
         HFONT f3 = MakeFont(12);
         HGDIOBJ o3 = SelectObject(dc, f3);
-        RECT hr = { p2.left + 16, p2.bottom - 52, p2.right - 200, p2.bottom - 30 };
-        DrawTextW(dc, L"↑↓ 选择 · Enter 修改绑定 · Delete 清除 · Esc 关闭", -1, &hr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        SetTextColor(dc, RGB(120, 124, 132));
+        RECT hr = { p.left + 16, p.bottom - 52, p.right - 200, p.bottom - 30 };
+        DrawTextW(dc, L"左：点热盒选中扇区 · 右：点结果即绑定", -1, &hr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         SelectObject(dc, o3);
         DeleteObject(f3);
-    }
-    {   // 底部按钮：取消 / 确定
-        RECT p = PanelRect();
+
         int bw = 76, bh = 26, gap = 10;
         RECT okB = { p.right - 16 - bw, p.bottom - 16 - bh, p.right - 16, p.bottom - 16 };
         RECT caB = { okB.left - gap - bw, okB.top, okB.left - gap, okB.bottom };
         FillRound(dc, caB, 5, RGB(48, 48, 52), RGB(70, 70, 78));
         FillRound(dc, okB, 5, RGB(58, 110, 168), RGB(70, 120, 180));
-        SetBkMode(dc, TRANSPARENT);
         HFONT bf = MakeFont(13);
         HGDIOBJ bo = SelectObject(dc, bf);
+        SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, RGB(210, 214, 220));
         DrawTextW(dc, L"取消", -1, &caB, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         SetTextColor(dc, RGB(240, 245, 255));
@@ -1551,6 +1596,7 @@ static void DrawSettings(HDC dc) {
         DeleteObject(bf);
     }
 }
+
 
 static void DrawTabs(HDC dc) {
     for (int i = 0; i < kTabCount; ++i) {
@@ -2489,6 +2535,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (p.x >= gear.left && p.x < gear.right && p.y >= gear.top && p.y < gear.bottom) {
                 g_mode = M_SETTINGS;
                 g_sel = 0;
+                g_query.clear(); g_scroll = 0; g_selSearch = 0; UpdateResults(); SyncEditFromMode();
                 InvalidateRect(hwnd, nullptr, TRUE);
                 return 0;
             }
@@ -2589,13 +2636,25 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     return 0;
                 }
             }
-            for (int i = 0; i < 8; ++i) {
-                RECT r = SettingRowRect(i);
-                if (p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom) {
-                    g_sel = i;
-                    g_bindSlot = i;
-                    EnterSearch();
-                    InvalidateRect(hwnd, nullptr, TRUE);
+            for (int i = 0; i < 8; ++i) {   // 左侧环状热盒：点击选中
+                RECT rr0 = SetRingRect(i);
+                if (p.x >= rr0.left && p.x < rr0.right && p.y >= rr0.top && p.y < rr0.bottom) { g_sel = i; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            }
+            for (int row = 0; row < 12; ++row) {   // 右侧结果：点击绑定到选中扇区
+                RECT rr1 = SetResultRect(row);
+                if (p.x >= rr1.left && p.x < rr1.right && p.y >= rr1.top && p.y < rr1.bottom) {
+                    int idx = g_scroll + row;
+                    if (idx >= 0 && idx < (int)g_results.size()) {
+                        Item& it = g_results[idx];
+                        g_slots[g_sel].name = it.name;
+                        g_slots[g_sel].kind = it.kind;
+                        g_slots[g_sel].value = it.value;
+                        g_slots[g_sel].key = std::to_wstring(g_sel + 1);
+                        g_slots[g_sel].used = true;
+                        SaveSectors();
+                        Log("bind sector " + std::to_string(g_sel) + " -> " + Narrow(it.name));
+                        InvalidateRect(hwnd, nullptr, TRUE);
+                    }
                     return 0;
                 }
             }
@@ -2731,7 +2790,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         if (g_mode == M_PIE) {
             if (wp == VK_TAB) { EnterSearch(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
-            if (wp == VK_F2) { g_mode = M_SETTINGS; g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            if (wp == VK_F2) { g_mode = M_SETTINGS; g_sel = 0; g_query.clear(); g_scroll = 0; g_selSearch = 0; UpdateResults(); SyncEditFromMode(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
             // 1~8 或自定义键
             for (int i = 0; i < 8; ++i) {
                 if (!g_slots[i].used) continue;
@@ -2849,7 +2908,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         switch (LOWORD(wp)) {
-            case IDM_SETTINGS: g_mode = M_SETTINGS; g_sel = 0; InvalidateRect(hwnd, nullptr, TRUE); return 0;
+            case IDM_SETTINGS: g_mode = M_SETTINGS; g_sel = 0; g_query.clear(); g_scroll = 0; g_selSearch = 0; UpdateResults(); SyncEditFromMode(); InvalidateRect(hwnd, nullptr, TRUE); return 0;
             case IDM_ACTIONS: OpenPath(ExeDir() + L"\\actions"); return 0;
             case IDM_RELOAD: LoadSectors(); LoadIndex(); InvalidateRect(hwnd, nullptr, TRUE); return 0;
             case IDM_LOG: OpenPath(ExeDir() + L"\\Cavalry_ShortCut.log"); return 0;
