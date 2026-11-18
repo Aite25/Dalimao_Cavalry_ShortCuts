@@ -969,7 +969,7 @@ static RECT RowRect(int i);
 
 static int VisibleRows() {
     int h = PanelRect().bottom - (RowRect(0).top) - 6;
-    int n = h / 26;
+    int n = h / 30;
     if (n < 3) n = 3;
     if (n > 30) n = 30;
     return n;
@@ -980,8 +980,8 @@ static RECT RowRect(int i) {
     RECT r;
     r.left = p.left + 16;
     r.right = p.right - 34;
-    r.top = p.top + 112 + i * 26;
-    r.bottom = r.top + 26;
+    r.top = p.top + 112 + i * 30;
+    r.bottom = r.top + 30;
     return r;
 }
 
@@ -1002,7 +1002,7 @@ static RECT IconRect(int i) {   // 0=文件夹 1=齿轮
     r.right = p.right - 12 - i * 26;
     r.left = r.right - 20;
     r.top = p.top + 10;
-    r.bottom = r.top + 26;
+    r.bottom = r.top + 30;
     return r;
 }
 
@@ -1137,7 +1137,7 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
 
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
     SetBkMode(dc, TRANSPARENT);
-    HFONT ft = MakeFont(13);
+    HFONT ft = MakeFont(15);
     HGDIOBJ of = SelectObject(dc, ft);
     SetTextColor(dc, RGB(140, 140, 140));
     RECT tr = { p.left + 16, p.top + 10, p.right - 16, p.top + 30 };
@@ -1149,7 +1149,7 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
     RECT ir = InputRect();
     FillRound(dc, ir, 8, RGB(22, 22, 24), RGB(80, 80, 84));
     if (input.empty()) {
-        HFONT fi = MakeFont(15);
+    HFONT fi = MakeFont(16);
         of = SelectObject(dc, fi);
         SetTextColor(dc, RGB(110, 110, 110));
         RECT irc = ir; irc.left += 10;
@@ -1222,7 +1222,7 @@ static void DrawResults(HDC dc) {
         int i = g_scroll + row;
         if (i >= (int)g_results.size()) break;
         RECT r = RowRect(row);
-        RECT fr = r; fr.bottom = r.top + 26;   // 整行（含行距），高亮无缝隙
+        RECT fr = r; fr.bottom = r.top + 30;   // 整行（含行距），高亮无缝隙
         bool sel = (i == g_sel);
         bool hov = (i == g_hoverRow);
         // 普通行填面板色（看起来"无块"），hover 蓝、选中灰；再画 1px 描边
@@ -1244,7 +1244,7 @@ static void DrawResults(HDC dc) {
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, kText);
-        HFONT f = MakeFont(15);
+        HFONT f = MakeFont(17);
         HGDIOBJ of = SelectObject(dc, f);
         RECT ibox = { r.left + 30, (r.top + r.bottom) / 2 - 8, r.left + 46, (r.top + r.bottom) / 2 + 8 };
         if (g_results[i].kind == L"layer") DrawIcon(dc, g_results[i].value, ibox);
@@ -1292,7 +1292,7 @@ static void DrawResults(HDC dc) {
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, RGB(130, 130, 130));
-        HFONT f = MakeFont(14);
+        HFONT f = MakeFont(16);
         HGDIOBJ of = SelectObject(dc, f);
         DrawTextW(dc, L"没有匹配项", -1, &r, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         SelectObject(dc, of);
@@ -1305,8 +1305,8 @@ static RECT SettingRowRect(int i) {
     RECT r;
     r.left = p.left + 232;
     r.right = p.right - 16;
-    r.top = p.top + 112 + i * 26;
-    r.bottom = r.top + 26;
+    r.top = p.top + 112 + i * 30;
+    r.bottom = r.top + 30;
     return r;
 }
 
@@ -1348,7 +1348,7 @@ static void DrawSettings(HDC dc) {
 
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
     SetBkMode(dc, TRANSPARENT);
-    HFONT ft = MakeFont(13);
+    HFONT ft = MakeFont(15);
     HGDIOBJ of = SelectObject(dc, ft);
     SetTextColor(dc, RGB(140, 140, 140));
     DrawPieTabs(dc);
@@ -1404,7 +1404,7 @@ static void DrawSettings(HDC dc) {
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, kText);
-        HFONT f = MakeFont(15);
+        HFONT f = MakeFont(17);
         HGDIOBJ of2 = SelectObject(dc, f);
         std::wstring label = std::wstring(dirs[i]) + L"   " +
                              (g_slots[i].used ? g_slots[i].name : L"（空）");
@@ -1451,7 +1451,7 @@ static void DrawTabs(HDC dc) {
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(255, 255, 255) : RGB(150, 150, 155));
-        HFONT f = MakeFont(14);
+        HFONT f = MakeFont(16);
         HGDIOBJ of = SelectObject(dc, f);
         DrawTextW(dc, kTabs[i], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         SelectObject(dc, of);
@@ -2102,9 +2102,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             int hr = -1;
             {
                 RECT first = RowRect(0);
-                RECT area = { first.left, first.top, first.right, first.bottom + 26 * (VisibleRows() - 1) + 6 };
+                RECT area = { first.left, first.top, first.right, first.bottom + 30 * (VisibleRows() - 1) + 6 };
                 if (mp.x >= area.left && mp.x < area.right && mp.y >= area.top && mp.y < area.bottom) {
-                    int idx = (mp.y - first.top) / 26;
+                    int idx = (mp.y - first.top) / 30;
                     if (idx >= 0 && idx < VisibleRows()) hr = g_scroll + idx;
                 }
             }
