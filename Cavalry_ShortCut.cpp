@@ -233,9 +233,9 @@ static void LoadActive();
 // ---------------------------------------------------------------- 顶部页签（热盒 1-4 / 修饰键）
 static RECT TabBoxRect(int i) {   // 第一行：1..4
     RECT r;
-    r.left = 24 + i * 62;
+    r.left = 24 + i * 58;   // 与修饰键行同宽同间距
     r.top = 24;
-    r.right = r.left + 62;
+    r.right = r.left + 58;
     r.bottom = r.top + 24;
     return r;
 }
