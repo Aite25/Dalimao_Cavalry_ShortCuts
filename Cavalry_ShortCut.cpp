@@ -449,6 +449,7 @@ static void RunScriptText(const std::string& script) {
 
 static std::wstring Trim(const std::wstring& s);
 static bool IsCavalryWindow(HWND h);
+static void HideHotbox(HWND hwnd);
 static std::string DescribeWindow(HWND h);
 static HWND g_cavalryWnd = nullptr;
 // ---------------------------------------------------------------- 操作（快捷键）
@@ -548,7 +549,7 @@ static void RunItem(const Item& it) {
         RunScriptText("(function(){var id=api.create(\"" + Narrow(it.value) + "\"); if(id) api.select([id]);})();");
     } else if (it.kind == L"keys") {
         {
-            ShowWindow(g_main, SW_HIDE);
+    HideHotbox(g_main ? g_main : GetActiveWindow());
             Sleep(60);
             HWND cav = g_cavalryWnd;
             if (!cav || !IsWindow(cav)) { HWND fg = GetForegroundWindow(); if (IsCavalryWindow(fg)) cav = fg; }
@@ -566,7 +567,7 @@ static void RunItem(const Item& it) {
             SendCombo(it.value);
         }
     }
-    ShowWindow(g_main, SW_HIDE);
+    HideHotbox(g_main ? g_main : GetActiveWindow());
     g_mode = M_PIE;
     SyncEditFromMode();
     g_query.clear();
@@ -1660,6 +1661,19 @@ static void ForceForeground(HWND hwnd) {
     if (fgThread && fgThread != myThread) AttachThreadInput(fgThread, myThread, FALSE);
 }
 
+static void HideHotbox(HWND hwnd) {
+    // 先把界面复位成圆盘并画好，再隐藏：这样下次显示的第一帧就是圆盘，不会闪搜索面板
+    g_mode = M_PIE;
+    g_hover = -1;
+    g_query.clear();
+    SyncEditFromMode();
+    if (IsWindowVisible(hwnd)) {
+        InvalidateRect(hwnd, nullptr, TRUE);
+        UpdateWindow(hwnd);
+    }
+    ShowWindow(hwnd, SW_HIDE);
+}
+
 static void ShowAtCursor(HWND hwnd) {
     if (IsWindowVisible(hwnd)) ShowWindow(hwnd, SW_HIDE);   // 先藏起来，避免旧画面（搜索面板）闪一下
     g_mode = M_PIE;
@@ -2183,7 +2197,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (g_binding) { g_binding = false; ShowWindow(hwnd, SW_HIDE); return 0; }
             if (g_mode == M_SEARCH && g_bindSlot >= 0) { g_mode = M_SETTINGS; g_bindSlot = -1; }
             else if (g_mode != M_PIE) { g_mode = M_PIE; }
-            else { g_mode = M_PIE; g_query.clear(); SyncEditFromMode(); ShowWindow(hwnd, SW_HIDE); }
+            else { HideHotbox(hwnd); }
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
         }
