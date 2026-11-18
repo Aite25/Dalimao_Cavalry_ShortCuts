@@ -590,7 +590,6 @@ static void LoadOps() {
         g_opsNames.push_back(name);
         g_opsHints.push_back(key);
         g_opsFiles.push_back(fname);
-        Log("op+ " + Narrow(name) + " | " + Narrow(fname) + " | cat=" + Narrow(it.cat));
     }
 }
 
@@ -920,7 +919,6 @@ static void UpdateResults() {
         g_results = pref;
         for (auto& it : rest) g_results.push_back(it);
     }
-    Log("results=" + std::to_string(g_results.size()) + " tab=" + std::to_string(g_tab) + " query=" + Narrow(g_query));
     if (g_sel >= (int)g_results.size()) g_sel = 0;
 }
 
