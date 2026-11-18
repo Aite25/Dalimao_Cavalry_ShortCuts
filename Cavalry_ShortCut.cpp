@@ -419,12 +419,30 @@ static bool StartBridge() {
     return false;
 }
 
+static bool g_preambleDone = false;
+
+static void EnsurePreamble() {
+    if (g_preambleDone) return;
+    std::string out; DWORD st = 0;
+    if (HttpCall(L"POST", L"/call", "{\"name\":\"read_preamble\",\"args\":{}}", out, st)) {
+        g_preambleDone = true;
+    }
+}
+
 static void RunScriptText(const std::string& script) {
     if (script.empty()) return;
     std::string body = "{\"name\":\"execute_script\",\"args\":{\"script\":\"" + EscapeJson(script) + "\"}}";
     std::string out;
     DWORD st = 0;
+    EnsurePreamble();
     if (!HttpCall(L"POST", L"/call", body, out, st)) Log("bridge call failed");
+    else if (out.find("Read the preamble") != std::string::npos) {
+        g_preambleDone = false;
+        EnsurePreamble();
+        HttpCall(L"POST", L"/call", body, out, st);
+        Log("ran script (retry after preamble) -> " + std::string(out.find("isError\":false") != std::string::npos ? "ok" : "error"));
+        return;
+    }
     else Log("ran script (" + std::to_string(script.size()) + " bytes) -> " +
              (out.find("\"isError\":false") != std::string::npos ? "ok" : "error"));
 }
