@@ -2269,11 +2269,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_dragging) {
             POINT pt; GetCursorPos(&pt);
             int nx = pt.x - g_dragOffset.x, ny = pt.y - g_dragOffset.y;
-            RECT work; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
-            if (nx < work.left) nx = work.left;
-            if (ny < work.top) ny = work.top;
-            if (nx + g_winW > work.right) nx = work.right - g_winW;
-            if (ny + g_winH > work.bottom) ny = work.bottom - g_winH;
             SetWindowPos(hwnd, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
             return 0;
         }
