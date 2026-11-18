@@ -94,7 +94,42 @@ if (!IsWindowVisible(hwnd) || g_mode != M_PIE) ShowAtCursor(hwnd);
 后续的 `SetWindowPos(hwnd, HWND_TOP, ...)`（`ForceForeground` 里）会把 topmost 状态冲掉。
 **若要真正置顶**：创建窗口时就要带 `WS_EX_TOPMOST`。
 
-**注意**：当前版本**故意不用 TOPMOST**——要求"其它应用窗口能盖住热盒"。
+**注意**：当前版本**故意不用常驻 TOPMOST**——要求"其它应用窗口能盖住热盒"。
+
+### 8b. 切走再切回来后，`HWND_TOP` 已经不够用了 ⚠️ 踩过（最坑）
+
+现象：第一次呼出正常；切到别的窗口再切回 Cavalry，再呼出——日志一切正常（`after show: vis=1`），但屏幕上什么都看不见。
+
+原因：热盒是 `WS_EX_NOACTIVATE` 的非激活窗口。当 Cavalry 被**激活**后，单纯的 `SetWindowPos(hwnd, HWND_TOP, ...)` **无法越过当前激活窗口**，只能排在它下面。
+
+**修法：TOPMOST 闪一下再取消**
+
+```cpp
+SetWindowPos(hwnd, HWND_TOPMOST,   x, y, w, h, SWP_SHOWWINDOW | SWP_NOACTIVATE);  // 必然盖住前台
+SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, w, h, SWP_NOACTIVATE);                    // 立刻取消
+```
+
+效果正好是想要的：**呼出时一定在最前**，但**之后点别的窗口仍能盖住热盒**。
+
+**验证方法**：用 `WindowFromPoint(窗口中心)` 看最上层是谁——
+返回自己的类名才算真的在最前面（`IsWindowVisible` / `PrintWindow` 都判断不出来）。
+
+### 8c. 重新呼出时先闪一下上一次的界面（搜索面板）
+
+现象：在搜索面板里按 `Esc` 关闭后，再呼出会看到搜索面板一闪，然后才变成圆盘。
+
+原因：`ShowWindow` 先显示，模式状态和重绘在之后才生效 → 第一帧画的是旧内容。
+
+**修法**（三步都要）：
+
+```cpp
+if (IsWindowVisible(hwnd)) ShowWindow(hwnd, SW_HIDE);  // 1. 先藏
+g_mode = M_PIE; SyncEditFromMode();                     // 2. 复位到圆盘
+InvalidateRect(hwnd, nullptr, TRUE); UpdateWindow(hwnd); // 3. 先画好
+SetWindowPos(hwnd, HWND_TOPMOST, ...);                  // 4. 再显示
+```
+
+另外，`Esc` 关闭时也要把 `g_mode` 复位成 `M_PIE`，否则下次显示的第一帧仍是搜索态。
 
 ### 9. `SWP_NOACTIVATE` 导致键盘事件收不到
 
