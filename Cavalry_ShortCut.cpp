@@ -1306,7 +1306,7 @@ static bool ParseHotkey(const std::wstring& spec, UINT& mods, UINT& vk) {
         if (low == L"shift")                     { mods |= MOD_SHIFT;   continue; }
         if (low == L"win")                       { mods |= MOD_WIN;     continue; }
         if (token == L"`") { vk = VK_OEM_3; continue; }   // 反引号
-        if (token == L" " || token == L"space") { vk = VK_SPACE; continue; }
+        if (low == L"space" || token == L" ") { vk = VK_SPACE; continue; }
         if (token.size() == 1) {
             wchar_t c = (wchar_t)towupper(token[0]);
             if ((c >= L'A' && c <= L'Z') || (c >= L'0' && c <= L'9')) { vk = (UINT)c; continue; }
@@ -1598,7 +1598,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         {   // 仅当 Cavalry 或热盒自己在前台时才占用热键
             HWND fg = GetForegroundWindow();
             bool want = IsCavalryWindow(fg) || fg == hwnd || (g_main && fg == g_main) || (g_edit && fg == g_edit);
-            if (want != g_hotkeyOn) SetHotkeyEnabled(want);
+            // 保持常驻注册；是否响应在 WM_HOTKEY 里按前台判断
         }
         TickCavalryState(hwnd);
         if (IsWindowVisible(hwnd) && g_mode == M_PIE) {
@@ -2069,6 +2069,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     case WM_HOTKEY:
         Log("WM_HOTKEY id=" + std::to_string((int)wp));
+        { HWND fgc = GetForegroundWindow(); if (!IsCavalryWindow(fgc) && !IsWindowVisible((HWND)(g_main ? g_main : hwnd))) return 0; }
         if (wp == HOTKEY_TOGGLE) {
             HWND target = g_main ? g_main : hwnd;
             bool visible = IsWindowVisible(target);
@@ -2162,6 +2163,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     HWND msgWnd = CreateWindowExW(0, L"CavalryShortCut", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, inst, nullptr);
     g_msgWndGlobal = msgWnd;
     BOOL hk = TRUE;   // 热键改为按需注册（仅 Cavalry 前台）
+    SetHotkeyEnabled(true);   // 启动即注册，避免按需注册的时序问题
     Log("hotkey " + Narrow(g_hotkeySpec) + " -> " + (hk ? "ok" : ("FAIL err=" + std::to_string(GetLastError()))));
 
     SetTimer(hwnd, 1, 5, nullptr);   // 5ms
