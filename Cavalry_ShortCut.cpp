@@ -2201,7 +2201,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
         }
-        if (g_mode == M_SEARCH && IsWindowVisible(hwnd) && g_edit) {
+        if (g_mode == M_SEARCH && IsWindowVisible(hwnd) && g_edit && !g_inMenu) {   // 弹出菜单时别抢焦点，否则菜单一闪就没
             if (GetFocus() != g_edit) SetFocus(g_edit);
         }
         return 0;
@@ -2297,9 +2297,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 for (auto& k : g_pinned) if (k == pinKey) { isPinned = true; break; }
                 AppendMenuW(hm, MF_STRING, 1002, isPinned ? L"取消置顶" : L"置顶");
                 POINT sp; GetCursorPos(&sp);
-                SetForegroundWindow(hwnd);
+                ForceForeground(hwnd);   // 输入框宿主可能占着前台，用 AttachThreadInput 版强制切回
+                g_inMenu = true;
                 int cmd = (int)TrackPopupMenu(hm, TPM_RETURNCMD | TPM_RIGHTBUTTON, sp.x, sp.y, 0, hwnd, nullptr);
+                g_inMenu = false;
                 DestroyMenu(hm);
+                PostMessageW(hwnd, WM_NULL, 0, 0);   // 让菜单正常关闭（避免焦点锁导致一闪就没）
                 if (cmd == 1002) {
                     std::wstring pk = g_results[idx2].kind + L"|" + g_results[idx2].value;
                     bool found = false;
