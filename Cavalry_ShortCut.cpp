@@ -649,7 +649,7 @@ static LRESULT CALLBACK EditSubclass(HWND h, UINT m, WPARAM w, LPARAM l, UINT_PT
     if (m == WM_KEYDOWN) {
         bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
         bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-        if (ctrl && w == 'A') { SendMessageW(h, EM_SETSEL, (WPARAM)0, (LPARAM)-1); return 0; }
+        if (ctrl && w == 'A') { g_selAll = true; SendMessageW(h, EM_SETSEL, (WPARAM)0, (LPARAM)-1); if (g_main) InvalidateRect(g_main, nullptr, TRUE); return 0; }
         if (ctrl && w >= '1' && w <= '6') { PostMessageW(g_main, WM_APP + 5, (WPARAM)(w - '0'), 0); return 0; }
         if (w == VK_TAB) { PostMessageW(g_main, WM_APP + 6, (WPARAM)(shift ? 1 : 0), 0); return 0; }
         if (w == VK_OEM_3) { PostMessageW(g_main, WM_APP + 7, 0, 0); return 0; }   // ` 执行
@@ -1153,10 +1153,18 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
     RECT ir = InputRect();
     FillRound(dc, ir, 8, RGB(22, 22, 24), RGB(80, 80, 84));
     {   // 输入内容自己画：分层窗口（UpdateLayeredWindow）内的子窗口 EDIT 不会被合成
-        HFONT fi = MakeFont(16);
+        HFONT fi = MakeFont(19);
         of = SelectObject(dc, fi);
         SetTextColor(dc, input.empty() ? RGB(110, 110, 110) : RGB(235, 235, 240));
         RECT irc = ir; irc.left += 10; irc.right -= 10;
+        if (g_selAll && !input.empty()) {   // 全选高亮
+            SIZE sz0 = {0, 0};
+            GetTextExtentPoint32W(dc, input.c_str(), (int)input.size(), &sz0);
+            RECT hr0 = { irc.left - 2, ir.top + 6, irc.left + sz0.cx + 3, ir.bottom - 6 };
+            HBRUSH hb0 = CreateSolidBrush(RGB(48, 92, 160));
+            FillRect(dc, &hr0, hb0);
+            DeleteObject(hb0);
+        }
         DrawTextW(dc, input.empty() ? L"输入以搜索（Tab / Esc 返回）" : input.c_str(), -1, &irc,
                   DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
         if (!input.empty()) {
@@ -2454,6 +2462,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
     case WM_CHAR: {
         if (g_mode == M_SEARCH) {
+            if (g_selAll) { g_query.clear(); g_selAll = false; if (g_edit) SetWindowTextW(g_edit, L""); }
             if (g_edit) {   // 消息能到主窗口，就说明字符是冲我们来的，一律转交
                 SendMessageW(g_edit, WM_CHAR, wp, lp);
                 SendMessageW(g_edit, EM_SETSEL, (WPARAM)-1, (LPARAM)-1);
@@ -2662,6 +2671,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             wchar_t buf[256] = {0};
             GetWindowTextW(g_edit, buf, 255);
             g_query = buf;
+            g_selAll = false;   // 文本变化即取消全选高亮
             g_sel = 0; g_scroll = 0;
             UpdateResults();
             InvalidateRect(hwnd, nullptr, FALSE);
