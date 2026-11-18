@@ -981,7 +981,7 @@ static RECT RowRect(int i) {
     r.left = p.left + 16;
     r.right = p.right - 34;
     r.top = p.top + 112 + i * 30;
-    r.bottom = r.top + 30;
+    r.bottom = r.top + 18;
     return r;
 }
 
@@ -996,13 +996,13 @@ static RECT TabRect(int i) {
     return r;
 }
 
-static RECT IconRect(int i) {   // 0=文件夹 1=齿轮
+static RECT IconRect(int i) {   // 只保留设置（齿轮），忽略参数
     RECT p = PanelRect();
     RECT r;
-    r.right = p.right - 12 - i * 26;
-    r.left = r.right - 20;
-    r.top = p.top + 10;
-    r.bottom = r.top + 30;
+    r.right = p.right - 2;
+    r.left = r.right - 18;
+    r.top = p.top + 33;
+    r.bottom = r.top + 18;
     return r;
 }
 
@@ -1306,7 +1306,7 @@ static RECT SettingRowRect(int i) {
     r.left = p.left + 232;
     r.right = p.right - 16;
     r.top = p.top + 112 + i * 30;
-    r.bottom = r.top + 30;
+    r.bottom = r.top + 18;
     return r;
 }
 
@@ -1466,36 +1466,19 @@ static void DrawTabs(HDC dc) {
     }
 }
 static void DrawTopIcons(HDC dc) {
-    // 图标底色：避免落在色键透明区（那边鼠标会穿透到下面的应用）
-    {
-        RECT bg = IconRect(1);
-        RECT bg2 = IconRect(0);
-        RECT pill = { bg.left - 6, bg.top - 4, bg2.right + 6, bg2.bottom + 4 };
-        FillRound(dc, pill, 8, RGB(40, 40, 43), RGB(56, 56, 60));
-    }
-    HPEN pen = CreatePen(PS_SOLID, 1, RGB(140, 140, 145));
+    // 右上角：设置齿轮（小号，与页签行垂直居中，右对齐面板右缘）
+    RECT gr = IconRect(0);
+    int cx = (gr.left + gr.right) / 2, cy = (gr.top + gr.bottom) / 2;
+    int r1 = 5, r2 = 2;
+    HPEN pen = CreatePen(PS_SOLID, 1, RGB(150, 150, 156));
     HGDIOBJ op = SelectObject(dc, pen);
     HGDIOBJ ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-
-    // 文件夹
-    RECT fr = IconRect(1);   // 文件夹在左
-    RECT body = { fr.left + 2, fr.top + 8, fr.right - 2, fr.bottom - 4 };
-    RoundRect(dc, body.left, body.top, body.right, body.bottom, 4, 4);
-    RECT tabr = { fr.left + 4, fr.top + 3, fr.left + 14, fr.top + 9 };
-    RoundRect(dc, tabr.left, tabr.top, tabr.right, tabr.bottom, 3, 3);
-
-    // 齿轮
-    RECT gr = IconRect(0);   // 设置在右
-    int cx = (gr.left + gr.right) / 2, cy = (gr.top + gr.bottom) / 2;
-    int r1 = 6, r2 = 3;
     Ellipse(dc, cx - r1, cy - r1, cx + r1, cy + r1);
     Ellipse(dc, cx - r2, cy - r2, cx + r2, cy + r2);
-    for (int i = 0; i < 8; ++i) {
-        double a = i * 3.14159265 / 4.0;
-        MoveToEx(dc, cx + (int)(cos(a) * (r1 - 1)), cy + (int)(sin(a) * (r1 - 1)), nullptr);
-        LineTo(dc, cx + (int)(cos(a) * (r1 + 4)), cy + (int)(sin(a) * (r1 + 4)));
-    }
-
+    SetPixel(dc, cx, cy - r1 - 1, RGB(150, 150, 156));
+    SetPixel(dc, cx, cy + r1 + 1, RGB(150, 150, 156));
+    SetPixel(dc, cx - r1 - 1, cy, RGB(150, 150, 156));
+    SetPixel(dc, cx + r1 + 1, cy, RGB(150, 150, 156));
     SelectObject(dc, ob);
     SelectObject(dc, op);
     DeleteObject(pen);
@@ -2046,7 +2029,6 @@ static void ShowMenu(HWND hwnd) {
     HMENU menu = CreatePopupMenu();
     AppendMenuW(menu, MF_STRING, IDM_SETTINGS, L"设置…");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, IDM_ACTIONS, L"打开 actions 文件夹");
     AppendMenuW(menu, MF_STRING, IDM_RELOAD, L"重新读取 actions");
     AppendMenuW(menu, MF_STRING, IDM_LOG, L"查看调试日志");
     AppendMenuW(menu, MF_STRING, IDM_INI, L"打开 Cavalry_ShortCut.ini");
@@ -2308,42 +2290,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
         }
         // 图标点击：两个独立命中框（左=文件夹，右=设置）
+        // 图标点击：仅设置（右上角齿轮）
         {
             RECT gear = IconRect(0);
-            RECT fold = IconRect(1);
-            InflateRect(&gear, 10, 14);
-            InflateRect(&fold, 10, 14);
+            InflateRect(&gear, 8, 10);
             if (p.x >= gear.left && p.x < gear.right && p.y >= gear.top && p.y < gear.bottom) {
-                Log("gear hit");
                 g_mode = M_SETTINGS;
                 g_sel = 0;
                 InvalidateRect(hwnd, nullptr, TRUE);
                 return 0;
-            }
-            if (p.x >= fold.left && p.x < fold.right && p.y >= fold.top && p.y < fold.bottom) {
-                Log("folder icon hit");
-                {
-                    std::wstring dir = ExeDir() + L"\\actions";
-                    bool okPidl = OpenFolderViaPidl(dir);
-                    Log(std::string("open actions via PIDL -> ") + (okPidl ? "ok" : "fail"));
-                    bool okCom = okPidl ? true : OpenFolderViaShell(dir);
-                    Log(std::string("open actions via COM -> ") + (okCom ? "ok" : "fail"));
-                    HINSTANCE hr = okCom ? (HINSTANCE)42 : ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-                    Log("open actions folder -> " + std::to_string((INT_PTR)hr));
-                    if (!okCom || (INT_PTR)hr <= 32) {
-                        if (OpenClipboard(nullptr)) {
-                            EmptyClipboard();
-                            size_t bytes = (dir.size() + 1) * sizeof(wchar_t);
-                            HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, bytes);
-                            if (mem) {
-                                void* dst = GlobalLock(mem);
-                                if (dst) { memcpy(dst, dir.c_str(), bytes); GlobalUnlock(mem); SetClipboardData(CF_UNICODETEXT, mem); }
-                            }
-                            CloseClipboard();
-                        }
-                    }
-                }
-                return 0;   // 命中文件夹后不再落到扇区判定
             }
         }
 
