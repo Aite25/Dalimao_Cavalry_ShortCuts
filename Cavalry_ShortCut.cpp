@@ -1660,6 +1660,7 @@ static void ForceForeground(HWND hwnd) {
 }
 
 static void ShowAtCursor(HWND hwnd) {
+    if (IsWindowVisible(hwnd)) ShowWindow(hwnd, SW_HIDE);   // 先藏起来，避免旧画面（搜索面板）闪一下
     g_mode = M_PIE;
     { HWND fg0 = GetForegroundWindow(); if (fg0 && IsCavalryWindow(fg0)) g_cavalryWnd = fg0; }
     g_box = 0; g_mod = 0; LoadActive();   // 每次呼出都从"热盒1 · 无"开始
@@ -1684,6 +1685,8 @@ static void ShowAtCursor(HWND hwnd) {
 
     g_shownTick = GetTickCount();
     // 先短暂置顶再取消：确保能盖住当前前台窗口，但之后仍可被其它窗口覆盖
+    InvalidateRect(hwnd, nullptr, TRUE);
+    UpdateWindow(hwnd);   // 先按"圆盘"画好，再显示
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, g_winW, g_winH, SWP_SHOWWINDOW | SWP_NOACTIVATE);
     SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, g_winW, g_winH, SWP_NOACTIVATE);
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
@@ -2170,7 +2173,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (g_binding) { g_binding = false; ShowWindow(hwnd, SW_HIDE); return 0; }
             if (g_mode == M_SEARCH && g_bindSlot >= 0) { g_mode = M_SETTINGS; g_bindSlot = -1; }
             else if (g_mode != M_PIE) { g_mode = M_PIE; }
-            else ShowWindow(hwnd, SW_HIDE);
+            else { g_mode = M_PIE; g_query.clear(); SyncEditFromMode(); ShowWindow(hwnd, SW_HIDE); }
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
         }
