@@ -1475,32 +1475,8 @@ static bool AnyCavalryVisible() {
 }
 
 static void TickCavalryState(HWND hotbox) {
-    if (g_msgWndGlobal && !IsWindowVisible(hotbox)) UnregisterHotKey(g_msgWndGlobal, 2);   // 热盒没显示时不占用空格
-    if (!g_cavalryWnd || !IsWindow(g_cavalryWnd)) g_cavalryWnd = nullptr;
-    bool alive = g_cavalryWnd ? true : AnyCavalryVisible();
-    bool hideNow = false;
-    const char* why = "";
-    if (!alive) { hideNow = true; why = "notalive"; }
-    else if (g_cavalryWnd && (IsIconic(g_cavalryWnd) || !IsWindowVisible(g_cavalryWnd))) { hideNow = true; why = "iconic"; }
-
-    static int awayTicks = 0;
-    bool grace = (GetTickCount() - g_shownTick) < 1200;
-    if (!hideNow && !grace && IsWindowVisible(hotbox)) {
-        HWND fg = GetForegroundWindow();
-        bool mine = (fg == hotbox) || (g_main && fg == g_main) || (g_edit && fg == g_edit);
-        if (fg && !mine && !IsCavalryWindow(fg)) awayTicks++; else awayTicks = 0;
-        if (awayTicks > 20) { hideNow = true; why = "fg-not-cavalry"; }   // 连续 100ms 不在 Cavalry 才收起（忽略瞬间 null）
-    }
-
-    if (hideNow && IsWindowVisible(hotbox)) {
-        if (g_msgWndGlobal) UnregisterHotKey(g_msgWndGlobal, 2);
-        Log(std::string("tick hide reason=") + why + " fg=" + DescribeWindow(GetForegroundWindow()) + " grace=" + (grace ? "1" : "0"));
-        g_binding = false;
-        g_mode = M_PIE;
-        g_hover = -1;
-        SyncEditFromMode();
-        ShowWindow(hotbox, SW_HIDE);
-    }
+    // 不再自动关闭：覆盖其它应用也没关系，用户手动关闭（Esc/右键/再次触发）
+    if (g_msgWndGlobal && !IsWindowVisible(hotbox)) UnregisterHotKey(g_msgWndGlobal, 2);
 }
 
 
@@ -1655,7 +1631,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (env) { wcscpy_s(trig, env); wcscat_s(trig, L"\\CavalryShortCut.show"); free(env); }
             }
             WIN32_FILE_ATTRIBUTE_DATA fad = {};
-            bool cavThere = AnyCavalryVisible() && (IsCavalryWindow(GetForegroundWindow()) || IsWindowVisible(hwnd));
+            bool cavThere = AnyCavalryVisible();
             bool trigHit = cavThere && trig[0] && GetFileAttributesExW(trig, GetFileExInfoStandard, &fad) && CompareFileTime(&fad.ftLastWriteTime, &lastTrig) != 0;
             if (trigHit) {
                 { HWND fgx = GetForegroundWindow(); Log(std::string("trigger hit, fg=") + DescribeWindow(fgx) + " cavFront=" + ((IsCavalryWindow(fgx) || IsWindowVisible(hwnd)) ? "1" : "0")); }
