@@ -1733,6 +1733,17 @@ static std::string DescribeWindow(HWND h) {
 static int g_focusRetry = 0;   // 显示后短暂抢焦点重试
 static DWORD g_shownTick = 0;
 static bool g_forceShow = false;   // 仅调试用：--show-force 时即使 Cavalry 没开也显示
+static DWORD g_lastWarm = 0;
+
+static void WarmBridgeAsync() {
+    if (GetTickCount() - g_lastWarm < 20000) return;   // 20s 内不重复
+    g_lastWarm = GetTickCount();
+    std::thread([]() {
+        EnsurePreamble();
+        std::string o; DWORD st = 0;
+        HttpCall(L"POST", L"/call", "{\"name\":\"execute_script\",\"args\":{\"script\":\"1\"}}", o, st);
+    }).detach();
+}
 
 static bool AnyCavalryVisible() {
     CavProbe pr = { false, false };
@@ -1813,6 +1824,7 @@ static void HideHotbox(HWND hwnd) {
 }
 
 static void ShowAtCursor(HWND hwnd) {
+    WarmBridgeAsync();   // 每次呼出都确保桥会话是热的
     if (!g_forceShow && !AnyCavalryVisible()) { Log("show skipped: cavalry not running"); return; }
     bool cavFrontAtShow = IsCavalryWindow(GetForegroundWindow());   // 只有从 Cavalry 触发才抢焦点
     if (IsWindowVisible(hwnd)) ShowWindow(hwnd, SW_HIDE);   // 先藏起来，避免旧画面（搜索面板）闪一下
