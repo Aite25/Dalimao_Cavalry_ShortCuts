@@ -2107,7 +2107,23 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 return 0;
             }
             if (p.x >= fold.left && p.x < fold.right && p.y >= fold.top && p.y < fold.bottom) {
-                ShellExecuteW(nullptr, L"open", L"C:\\Windows\\explorer.exe", (L"\"" + ExeDir() + L"\\actions\"").c_str(), nullptr, SW_SHOWNORMAL);
+                {
+                    std::wstring dir = ExeDir() + L"\\actions";
+                    HINSTANCE hr = ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                    if ((INT_PTR)hr <= 32) {   // 失败时把路径放进剪贴板，至少能手动打开
+                        if (OpenClipboard(nullptr)) {
+                            EmptyClipboard();
+                            size_t bytes = (dir.size() + 1) * sizeof(wchar_t);
+                            HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, bytes);
+                            if (mem) {
+                                void* dst = GlobalLock(mem);
+                                if (dst) { memcpy(dst, dir.c_str(), bytes); GlobalUnlock(mem); SetClipboardData(CF_UNICODETEXT, mem); }
+                            }
+                            CloseClipboard();
+                        }
+                    }
+                    Log("open actions folder -> " + std::to_string((INT_PTR)hr));
+                }
                 return 0;
             }
         }
