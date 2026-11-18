@@ -258,7 +258,7 @@ static void SwitchSet(int box, int mod) {
 }
 
 static void DrawPieTabs(HDC dc) {
-    const wchar_t* boxLabels[4] = { L"Ctrl+1", L"Ctrl+2", L"Ctrl+3", L"Ctrl+4" };
+    const wchar_t* boxLabels[4] = { L"1", L"2", L"3", L"4" };
     const wchar_t* modLabels[4] = { L"无", L"Ctrl", L"Shift", L"Alt" };
 
     for (int i = 0; i < 4; ++i) {
@@ -2403,6 +2403,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     case WM_MBUTTONUP:
+        if (g_mode == M_SEARCH || g_mode == M_SETTINGS) SyncEditFromMode();   // 拖动结束恢复输入框
         g_dragging = false;
         ReleaseCapture();
         return 0;
@@ -2452,7 +2453,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             int nx = pt.x - g_dragOffset.x, ny = pt.y - g_dragOffset.y;
             RECT wr0; GetWindowRect(hwnd, &wr0);
             SetWindowPos(hwnd, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-            if (g_editHost && IsWindowVisible(g_editHost)) {   // 输入框宿主按位移同步，避免分离
+            if (g_editHost && IsWindowVisible(g_editHost)) {   // 拖动期间先藏起输入框，避免闪烁
+                ShowWindow(g_editHost, SW_HIDE);
+                return 0;
+            }
+            if (false) {
                 int dxw = nx - wr0.left, dyw = ny - wr0.top;
                 RECT hwr; GetWindowRect(g_editHost, &hwr);
                 SetWindowPos(g_editHost, nullptr, hwr.left + dxw, hwr.top + dyw, 0, 0,
