@@ -343,22 +343,32 @@ static void Log(const std::string& s) {
 }
 
 // ---------------------------------------------------------------- HTTP → bridge
+static HINTERNET g_httpSession = nullptr;
+static HINTERNET g_httpConnect = nullptr;
+
 static bool HttpCall(const wchar_t* method, const std::wstring& path, const std::string& body,
                      std::string& out, DWORD& status) {
     out.clear();
     status = 0;
 
-    HINTERNET session = WinHttpOpen(L"cavalry-shortcut/0.6", WINHTTP_ACCESS_TYPE_NO_PROXY,
+    if (!g_httpSession) {
+        g_httpSession = WinHttpOpen(L"cavalry-shortcut/0.6", WINHTTP_ACCESS_TYPE_NO_PROXY,
                                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!session) return false;
-    WinHttpSetTimeouts(session, 3000, 3000, 8000, 60000);
+        if (!g_httpSession) return false;
+        WinHttpSetTimeouts(g_httpSession, 3000, 3000, 8000, 60000);
+    }
+    if (!g_httpConnect) {
+        g_httpConnect = WinHttpConnect(g_httpSession, L"127.0.0.1", (INTERNET_PORT)kBridgePort, 0);
+        if (!g_httpConnect) return false;
+    }
 
-    HINTERNET connect = WinHttpConnect(session, L"127.0.0.1", (INTERNET_PORT)kBridgePort, 0);
-    if (!connect) { WinHttpCloseHandle(session); return false; }
-
-    HINTERNET request = WinHttpOpenRequest(connect, method, path.c_str(), nullptr,
+    HINTERNET request = WinHttpOpenRequest(g_httpConnect, method, path.c_str(), nullptr,
                                            WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
-    if (!request) { WinHttpCloseHandle(connect); WinHttpCloseHandle(session); return false; }
+    if (!request) {
+        WinHttpCloseHandle(g_httpConnect);
+        g_httpConnect = nullptr;
+        return false;
+    }
 
     const wchar_t* headers = body.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : L"Content-Type: application/json\r\n";
     BOOL ok = WinHttpSendRequest(request, headers, body.empty() ? 0 : (DWORD)-1L,
@@ -384,10 +394,9 @@ static bool HttpCall(const wchar_t* method, const std::wstring& path, const std:
     }
 
     WinHttpCloseHandle(request);
-    WinHttpCloseHandle(connect);
-    WinHttpCloseHandle(session);
     return ok != 0;
 }
+
 
 static bool BridgeAlive() {
     std::string out;
@@ -2537,6 +2546,14 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int show) {
     bool alive = BridgeAlive();
     if (!alive) alive = StartBridge();
     Log(std::string("bridge ") + (alive ? "ok" : "not connected"));
+    if (alive) {
+        std::thread([]() {   // 预热：让桥与 Cavalry 的会话先建立，避免第一次操作卡顿
+            EnsurePreamble();
+            std::string o; DWORD st = 0;
+            HttpCall(L"POST", L"/call", "{\"name\":\"execute_script\",\"args\":{\"script\":\"1\"}}", o, st);
+            Log("warmup done");
+        }).detach();
+    }
 
     WNDCLASSW wc = {};
     wc.lpfnWndProc = WndProc;
