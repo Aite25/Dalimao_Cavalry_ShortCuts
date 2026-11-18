@@ -2843,6 +2843,20 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     g_sel = 0; g_scroll = 0; UpdateResults(); InvalidateRect(hwnd, nullptr, TRUE); return 0;
                 }
             }
+        if (g_mode == M_SETTINGS) {   // 设置页：滚轮翻页签（页签行上或按住 Shift）
+            bool onTabs = (SetTabPosFromPoint(mp) >= 0);
+            if (onTabs || (GetKeyState(VK_SHIFT) & 0x8000)) {
+                int pos = 0;
+                for (int i = 0; i < kTabCount; ++i) if (g_tabOrder[i] == g_tab) { pos = i; break; }
+                pos = (pos + (delta > 0 ? kTabCount - 1 : 1)) % kTabCount;
+                g_tab = g_tabOrder[pos];
+                g_selSearch = 0; g_scroll = 0;
+                UpdateResults();
+                InvalidateRect(hwnd, nullptr, TRUE);
+                return 0;
+            }
+            return 0;
+        }
             g_scroll -= (delta / WHEEL_DELTA) * 3;
             UpdateScrollInfo();
             InvalidateRect(hwnd, nullptr, FALSE);
