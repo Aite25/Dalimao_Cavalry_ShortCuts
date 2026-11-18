@@ -1,4 +1,4 @@
-// name: 入点=当前帧（裁剪头部）
+// name: 裁剪入点
 // key: Alt+[
 // Trim in point to playhead (content stays)
 (function () {

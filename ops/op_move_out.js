@@ -1,4 +1,4 @@
-// name: 整体移动：出点对齐播放头（Move Out）
+// name: 整体出点对齐
 // key: 
 // Move Out Point (like AE Dalimao "Move Out Point")
 // Moves ALL selected layers together so the LATEST layer end lands on the playhead.

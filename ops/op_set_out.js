@@ -1,4 +1,4 @@
-// name: 设出点（设为当前帧）
+// name: 设出点
 // key: ]
 // Set Out Point at playhead — content shifts so the layer ends at the playhead
 (function () {

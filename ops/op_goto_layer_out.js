@@ -1,4 +1,4 @@
-// name: 跳到当前图层出点
+// name: 跳到图层出点
 // key: End
 (function () {
     var sel = api.getSelection();

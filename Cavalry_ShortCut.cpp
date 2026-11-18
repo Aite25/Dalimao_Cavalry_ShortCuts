@@ -898,6 +898,13 @@ static void LoadSectors() {
         s.used = !s.value.empty();
         if (s.kind.empty()) s.kind = L"script";
         if (s.kind == L"ops") {
+            if (s.name == L"设入点（设为当前帧）") s.name = L"设入点";
+            else if (s.name == L"设出点（设为当前帧）") s.name = L"设出点";
+            else if (s.name == L"入点=当前帧（裁剪头部）") s.name = L"裁剪入点";
+            else if (s.name == L"出点=当前帧（裁剪尾部）") s.name = L"裁剪出点";
+            else if (s.name == L"跳到当前图层出点") s.name = L"跳到图层出点";
+            else if (s.name == L"整体移动：入点对齐播放头（Move In）") s.name = L"整体入点对齐";
+            else if (s.name == L"整体移动：出点对齐播放头（Move Out）") s.name = L"整体出点对齐";
             for (size_t k = 0; k < g_opsNames.size(); ++k) {
                 if (g_opsNames[k] == s.name) { s.value = L"op:" + std::to_wstring(k); break; }
             }
