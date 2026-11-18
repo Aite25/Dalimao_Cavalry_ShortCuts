@@ -1002,8 +1002,8 @@ static RECT IconRect(int i) {   // 只保留设置（齿轮），忽略参数
     RECT p = PanelRect();
     RECT r;
     r.right = p.right - 3;
-    r.left = r.right - 18;
-    r.top = p.top + 5;    // 绝对 29
+    r.left = r.right - 14;   // 正方形 14x14
+    r.top = (g_mode == M_SEARCH) ? (p.top + 0) : (p.top + 5);   // 搜索页再上移 5px
     r.bottom = r.top + 14;   // 29..43 → 中心 36（与 Ctrl 行一致）
     return r;
 }
