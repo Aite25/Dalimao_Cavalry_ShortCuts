@@ -2106,6 +2106,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) { ShowWindow(hwnd, SW_HIDE); return 0; }   // 右键取消
             POINT cp; GetCursorPos(&cp);
             POINT cl = cp; ScreenToClient(hwnd, &cl);
+            cl.x -= kPadX; cl.y -= kPadY;   // 换算到内容坐标系
             int hv = HitTestPie(cl);
             if (hv < 0) hv = -1;
             if (hv != g_hover) { g_hover = hv; InvalidateRect(hwnd, nullptr, FALSE); }
@@ -2154,6 +2155,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;   // 切窗口不再关闭面板，方便观察状态
     case WM_SETCURSOR: {
         POINT cp; GetCursorPos(&cp); ScreenToClient(hwnd, &cp);
+        cp.x -= kPadX; cp.y -= kPadY;
         RECT pc = PanelRect();
         int ed = 0;
         if (g_mode != M_PIE && cp.x >= pc.right - 14 && cp.y >= pc.top + 48) ed |= 1;
@@ -2475,6 +2477,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     case WM_MOUSEWHEEL: {
         POINT mp; GetCursorPos(&mp); ScreenToClient(hwnd, &mp);
+        mp.x -= kPadX; mp.y -= kPadY;
         int delta = GET_WHEEL_DELTA_WPARAM(wp);
         if (g_mode == M_PIE) {
             bool onModRow = false;
