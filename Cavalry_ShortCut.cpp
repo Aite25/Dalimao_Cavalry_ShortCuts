@@ -64,7 +64,7 @@ static const COLORREF kCenterBorder = RGB(31, 31, 31);
 static const COLORREF kArcColor     = RGB(56, 181, 119);
 static const COLORREF kPanelFill    = RGB(30, 30, 32);
 static const COLORREF kPanelBorder  = RGB(70, 70, 74);
-static const COLORREF kRowSel       = RGB(56, 181, 119);
+static const COLORREF kRowSel       = RGB(44, 132, 88);
 
 static const int kCenterR  = 28;
 static const int kRectW    = 150;
@@ -1335,7 +1335,7 @@ static void DrawResults(HDC dc) {
         bool hov = (i == g_hoverRow);
         // 普通行填面板色（看起来"无块"），hover 蓝、选中灰；再画 1px 描边
         {
-            COLORREF fillc = hov ? RGB(58, 168, 110) : (sel ? RGB(70, 70, 74) : kPanelFill);
+            COLORREF fillc = hov ? RGB(46, 120, 84) : (sel ? RGB(70, 70, 74) : kPanelFill);
             HBRUSH fb = CreateSolidBrush(fillc);
             FillRect(dc, &fr, fb);
             DeleteObject(fb);
@@ -1548,8 +1548,8 @@ static void DrawSettings(HDC dc) {
         for (int i = 0; i < 8; ++i) {
             RECT r = SetRingRect(i);
             bool sel = (i == g_sel);
-            COLORREF fillc = sel ? RGB(58, 150, 92) : RGB(42, 42, 46);
-            COLORREF bordc = sel ? RGB(96, 220, 150) : RGB(64, 64, 70);
+            COLORREF fillc = sel ? RGB(44, 108, 72) : RGB(42, 42, 46);
+            COLORREF bordc = sel ? RGB(70, 150, 110) : RGB(64, 64, 70);
             FillRound(dc, r, 6, fillc, bordc);
             HGDIOBJ of = SelectObject(dc, f);
             SetBkMode(dc, TRANSPARENT);
@@ -1628,7 +1628,7 @@ static void DrawSettings(HDC dc) {
             int idx = g_scroll + row;
             if (idx >= (int)g_results.size()) break;
             RECT r = SetResultRect(row);
-            if (idx == g_selSearch) { FillRound(dc, r, 5, RGB(52, 136, 84), RGB(70, 170, 110)); }
+            if (idx == g_selSearch) { FillRound(dc, r, 5, RGB(40, 100, 68), RGB(54, 122, 88)); }
             of = SelectObject(dc, fr);
             SetBkMode(dc, TRANSPARENT);
             SetTextColor(dc, RGB(225, 228, 235));
@@ -1668,7 +1668,7 @@ static void DrawSettings(HDC dc) {
         RECT okB = { p.right - 16 - bw, p.bottom - 16 - bh, p.right - 16, p.bottom - 16 };
         RECT caB = { okB.left - gap - bw, okB.top, okB.left - gap, okB.bottom };
         FillRound(dc, caB, 5, RGB(48, 48, 52), RGB(70, 70, 78));
-        FillRound(dc, okB, 5, RGB(58, 168, 110), RGB(70, 180, 120));
+        FillRound(dc, okB, 5, RGB(46, 120, 84), RGB(56, 132, 96));
         HFONT bf = MakeFont(13);
         HGDIOBJ bo = SelectObject(dc, bf);
         SetBkMode(dc, TRANSPARENT);
