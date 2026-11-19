@@ -2217,6 +2217,8 @@ static void ForceForeground(HWND hwnd) {
 }
 
 static void HideHotbox(HWND hwnd) {
+    if (g_editHost) ShowWindow(g_editHost, SW_HIDE);   // 先收输入框小窗
+    if (g_scrollbar) ShowWindow(g_scrollbar, SW_HIDE);
     // 先把界面复位成圆盘并画好，再隐藏：这样下次显示的第一帧就是圆盘，不会闪搜索面板
     g_mode = M_PIE;
     g_hover = -1;
@@ -2376,6 +2378,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     switch (msg) {
     case WM_TIMER:
+        if (g_editHost && !IsWindowVisible(g_main) && IsWindowVisible(g_editHost)) ShowWindow(g_editHost, SW_HIDE);
         {   // 仅当 Cavalry 或热盒自己在前台时才占用热键
             HWND fg = GetForegroundWindow();
             bool want = IsCavalryWindow(fg) || fg == hwnd || (g_main && fg == g_main) || (g_edit && fg == g_edit);
