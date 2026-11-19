@@ -2938,8 +2938,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (g_mode == M_SETTINGS) { ExitSettingsMode(hwnd); HideHotbox(hwnd); return 0; }
             if (g_binding) { g_binding = false; ShowWindow(hwnd, SW_HIDE); return 0; }
             if (g_mode == M_SEARCH && g_bindSlot >= 0) { g_mode = M_SETTINGS; g_bindSlot = -1; }
-            else if (g_mode != M_PIE) { g_mode = M_PIE; }
-            SyncEditFromMode();   // 离开搜索/设置时收起输入框小窗
+            else if (g_mode != M_PIE) { g_mode = M_PIE; SyncEditFromMode(); }   // 离开搜索/设置时收起输入框小窗
             else { HideHotbox(hwnd); }
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
