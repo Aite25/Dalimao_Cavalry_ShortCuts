@@ -1357,7 +1357,7 @@ static void DrawResults(HDC dc) {
         RECT ibox = { r.left + 30, (r.top + r.bottom) / 2 - 8, r.left + 46, (r.top + r.bottom) / 2 + 8 };
         if (g_results[i].kind == L"layer") DrawIcon(dc, g_results[i].value, ibox);
         RECT tr = r; tr.left += 52; tr.right -= 90;
-        if (row < 6) {   // 只给当前可见的前 6 行编号
+        {   // 所有行都编号（1..n）；Ctrl+1~6 数字快捷键仍只到 6
             SetTextColor(dc, hov ? RGB(225, 232, 245) : (sel ? RGB(200, 200, 210) : RGB(120, 120, 128)));
             RECT nr = r; nr.left += 8; nr.right = nr.left + 22;
             std::wstring num = std::to_wstring(row + 1);
