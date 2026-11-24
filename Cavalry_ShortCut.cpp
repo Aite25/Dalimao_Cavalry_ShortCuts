@@ -1079,8 +1079,8 @@ static int VisibleTabs(int* out) {
 static RECT DotRect(int dotIndex) {   // 隐藏页签的小圆点（页签行右侧）
     RECT p = PanelRect();
     RECT tr = TabRect(0);
-    int cy = (tr.top + tr.bottom) / 2;
-    int cx = p.right - 18 - dotIndex * 16;
+    int cy = tr.top - 12;   // 页签行上方一行
+    int cx = p.left + 20 + dotIndex * 14;
     RECT r = { cx - 5, cy - 5, cx + 5, cy + 5 };
     return r;
 }
@@ -1105,7 +1105,7 @@ static int TabPosFromPoint(POINT pt) {
 
 static RECT TabRect(int i) {
     RECT p = PanelRect();
-    int w = 74, gap = 6;
+    int w = 48, gap = 4;   // 搜索页签更窄
     RECT r;
     r.left = p.left + 16 + i * (w + gap);
     r.right = r.left + w;
