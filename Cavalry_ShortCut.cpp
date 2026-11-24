@@ -1757,7 +1757,9 @@ static void DrawTabs(HDC dc) {
     RECT p = PanelRect();
     int vis[kTabCount];
     int n = VisibleTabs(vis);
-    for (int pos = 0; pos < n; ++pos) {
+    ComputeTabLayout();
+    int posFrom = g_tabScroll, posTo = g_tabScroll + g_tabCap; if (posTo > n) posTo = n;
+    for (int pos = posFrom; pos < posTo; ++pos) {
         int id = vis[pos];
         RECT r = TabRect(pos);
         bool on = (id == g_tab);
