@@ -2243,7 +2243,6 @@ static void ClampPieToWorkArea(HWND hwnd, int margin = 6) {
     int nx = wr.left, ny = wr.top;
     if (right - left + margin * 2 <= work.right - work.left) {
         if (left < work.left + margin) nx += (work.left + margin) - left;
-        if (right > work.right - margin) nx -= right - (work.right - margin);
     }
     if (bottom - top + margin * 2 <= work.bottom - work.top) {
         if (top < work.top + margin) ny += (work.top + margin) - top;
@@ -2252,23 +2251,27 @@ static void ClampPieToWorkArea(HWND hwnd, int margin = 6) {
     if (nx != wr.left || ny != wr.top) SetWindowPos(hwnd, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
 }
 
-static void ClampPanelToWorkArea(HWND hwnd, int margin = 8) {
+static void ClampPanelToWorkArea(HWND hwnd, int margin = 2) {
     if (!hwnd) return;
     RECT work; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
     RECT wr; GetWindowRect(hwnd, &wr);
-    int px = wr.left + kPadX, py = wr.top + kPadY;   // 内容左上角
+    RECT pr = PanelRect();                       // 面板本体的边界（不是整块内容区）
+    int left   = wr.left + kPadX + pr.left;
+    int top    = wr.top  + kPadY + pr.top;
+    int right  = wr.left + kPadX + pr.right;
+    int bottom = wr.top  + kPadY + pr.bottom;
     int nx = wr.left, ny = wr.top;
-    if (g_winW + margin * 2 <= work.right - work.left) {
-        if (px < work.left + margin) nx += (work.left + margin) - px;
-        if (px + g_winW > work.right - margin) nx -= (px + g_winW) - (work.right - margin);
+    if (right - left + margin * 2 <= work.right - work.left) {
+        if (left < work.left + margin) nx += (work.left + margin) - left;
+        if (right > work.right - margin) nx -= right - (work.right - margin);
     } else {
-        nx = work.left + (work.right - work.left - g_winW) / 2 - kPadX;   // 屏幕比面板窄：居中
+        nx = work.left + (work.right - work.left - (right - left)) / 2 - kPadX - pr.left;
     }
-    if (g_winH + margin * 2 <= work.bottom - work.top) {
-        if (py < work.top + margin) ny += (work.top + margin) - py;
-        if (py + g_winH > work.bottom - margin) ny -= (py + g_winH) - (work.bottom - margin);
+    if (bottom - top + margin * 2 <= work.bottom - work.top) {
+        if (top < work.top + margin) ny += (work.top + margin) - top;
+        if (bottom > work.bottom - margin) ny -= bottom - (work.bottom - margin);
     } else {
-        ny = work.top + (work.bottom - work.top - g_winH) / 2 - kPadY;
+        ny = work.top + (work.bottom - work.top - (bottom - top)) / 2 - kPadY - pr.top;
     }
     if (nx != wr.left || ny != wr.top) SetWindowPos(hwnd, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
 }
@@ -2978,7 +2981,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (g_mode == M_SETTINGS) { ExitSettingsMode(hwnd); HideHotbox(hwnd); return 0; }
             if (g_binding) { g_binding = false; ShowWindow(hwnd, SW_HIDE); return 0; }
             if (g_mode == M_SEARCH && g_bindSlot >= 0) { g_mode = M_SETTINGS; g_bindSlot = -1; }
-            else if (g_mode != M_PIE) { g_mode = M_PIE; SyncEditFromMode(); }   // 离开搜索/设置时收起输入框小窗
+            else if (g_mode != M_PIE) { HideHotbox(hwnd); return 0; }   // 搜索/设置页按 Esc 直接关闭
             else { HideHotbox(hwnd); }
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
