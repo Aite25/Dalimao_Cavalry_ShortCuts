@@ -2447,6 +2447,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             WIN32_FILE_ATTRIBUTE_DATA fad = {};
             bool cavThere = AnyCavalryVisible();
             static bool trigInit = false;
+            static DWORD startTick = GetTickCount();
+            if (GetTickCount() - startTick < 2000) {   // 启动后 2 秒内的旧触发一律忽略
+                if (trig[0] && GetFileAttributesExW(trig, GetFileExInfoStandard, &fad)) lastTrig = fad.ftLastWriteTime;
+                return 0;
+            }
             if (!trigInit) {   // 首次轮询：只记录旧触发文件的时间，不呼出（避免开着 Cavalry 启动时弹一次）
                 WIN32_FILE_ATTRIBUTE_DATA old = {};
                 if (trig[0] && GetFileAttributesExW(trig, GetFileExInfoStandard, &old)) lastTrig = old.ftLastWriteTime;
