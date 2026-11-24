@@ -1147,11 +1147,12 @@ static RECT IconRect(int i) {   // 只保留设置（齿轮），忽略参数
 
 static void ComputeTabLayout() {
     RECT p = PanelRect();
-    int right = (g_mode == M_SEARCH) ? (IconRect(0).left - 10) : (p.right - 16);
+    int right = (g_mode == M_SEARCH) ? (IconRect(0).left - 4) : (p.right - 16);
     int vis[kTabCount]; int n = VisibleTabs(vis);
     int avail = right - (p.left + 16);
-    int cap = avail / 52; if (cap < 1) cap = 1;
-    if (n > cap) { cap -= 2; if (cap < 1) cap = 1; }
+    int cap0 = avail / 52; if (cap0 < 1) cap0 = 1;
+    int cap = cap0;
+    if (n > cap0) { cap = (avail - 40) / 52; if (cap < 1) cap = 1; }   // 只在溢出时给两个箭头让位
     g_tabCap = cap;
     int cur = 0; for (int i = 0; i < n; ++i) if (vis[i] == g_tab) cur = i;
     if (g_tabScroll > n - cap) g_tabScroll = n - cap;
