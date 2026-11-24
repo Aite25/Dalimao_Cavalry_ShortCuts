@@ -50,6 +50,8 @@ using namespace Gdiplus;
 static const int kBridgePort = 6769;
 static int g_winW = 640;
 static int g_winH = 560;
+static int g_panelW = 640;   // 搜索/设置面板自己的尺寸（与热盒无关）
+static int g_panelH = 560;
 static const int kPadX = 180;   // 透明输入区左右扩展
 static const int kPadY = 70;    // 透明输入区上下扩展
 
@@ -2107,8 +2109,8 @@ static void SaveIni() {
     std::wstring order;
     for (int i = 0; i < kTabCount; ++i) { if (i) order += L","; order += std::to_wstring(g_tabOrder[i]); }
     s += L"taborder=" + order + L"\r\n";
-    s += L"panelw=" + std::to_wstring(g_winW) + L"\r\n";
-    s += L"panelh=" + std::to_wstring(g_winH) + L"\r\n";
+    s += L"panelw=" + std::to_wstring(g_panelW) + L"\r\n";
+    s += L"panelh=" + std::to_wstring(g_panelH) + L"\r\n";
     WriteFileUtf8(ExeDir() + L"\\Cavalry_ShortCut.ini", Narrow(s));
     Log("save ini panel " + std::to_string(g_winW) + "x" + std::to_string(g_winH));
 }
@@ -2127,8 +2129,8 @@ static void LoadConfig() {
         while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
         if (line.rfind("panelw=", 0) == 0 || line.rfind("panelh=", 0) == 0) {
             int v = _wtoi(Trim(Widen(line.substr(7))).c_str());
-            if (line[5] == 'w' && v >= 320 && v <= 2400) g_winW = v;
-            if (line[5] == 'h' && v >= 300 && v <= 1800) g_winH = v;
+            if (line[5] == 'w' && v >= 320 && v <= 2400) g_panelW = v;
+            if (line[5] == 'h' && v >= 300 && v <= 1800) g_panelH = v;
             Log("load ini panel " + std::to_string(g_winW) + "x" + std::to_string(g_winH));
             continue;
         }
@@ -2477,6 +2479,7 @@ static void ExitSettingsMode(HWND hwnd) {
 }
 
 static void ShowAtCursor(HWND hwnd) {
+    g_winW = 640; g_winH = 560;   // 热盒固定尺寸，不跟随搜索面板
     {   // 热更新：每次呼出重新扫描 actions\ 与 ops\，新脚本立刻可用
         g_index.clear();
         LoadIndex();
@@ -2535,6 +2538,10 @@ static void ToggleWindow(HWND hwnd) {
 }
 
 static void EnterSearch(wchar_t firstChar = 0) {
+    if (g_winW != g_panelW || g_winH != g_panelH) {
+        g_winW = g_panelW; g_winH = g_panelH;
+        SetWindowPos(g_main, HWND_TOP, 0, 0, g_winW + kPadX * 2, g_winH + kPadY * 2, SWP_NOMOVE | SWP_NOZORDER);
+    }
     g_mode = M_SEARCH;
     g_query.clear();
     g_sel = 0;
@@ -2951,6 +2958,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g_resizing = false; ReleaseCapture();
             ClampPanelToWorkArea(hwnd);
             if (g_mode == M_SEARCH || g_mode == M_SETTINGS) SyncEditFromMode();
+            g_panelW = g_winW; g_panelH = g_winH;
             SaveIni();   // 记住面板尺寸
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
