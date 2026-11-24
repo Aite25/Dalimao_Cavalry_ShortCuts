@@ -1,4 +1,4 @@
-// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
+﻿// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
 //
 // 参考 AE 插件 DalimaoShortcuts 的热盒：
 //   · 径向 8 扇区（N/NE/E/SE/S/SW/W/NW）+ 中心圆
@@ -1082,13 +1082,11 @@ static POINT g_dotPress = {0, 0};
 static RECT DotRectAt(int orderIndex) {
     RECT p = PanelRect();
     RECT tr = TabRect(0);
-    int visCount = 0;
-    for (int i = 0; i < kTabCount; ++i) { int id = g_tabOrder[i]; if (!g_tabHidden[id]) ++visCount; }
-    int dotIdx = 0;
-    for (int i = 0; i < orderIndex; ++i) { int id = g_tabOrder[i]; if (g_tabHidden[id]) ++dotIdx; }
-    int cx = p.left + 16 + visCount * 52 + 16 + dotIdx * 18;   // 页签行右侧
-    int cy = (tr.top + tr.bottom) / 2;
-    RECT r = { cx - 7, cy - 7, cx + 7, cy + 7 };
+    int visBefore = 0;
+    for (int i = 0; i < orderIndex; ++i) { int id = g_tabOrder[i]; if (!g_tabHidden[id]) ++visBefore; }
+    int cx = p.left + 16 + visBefore * 52;   // 该页签插入位置的缝隙中心（页签间距 4 → 缝隙中心）
+    int cy = tr.top - 9;                     // 页签行上方
+    RECT r = { cx - 4, cy - 4, cx + 4, cy + 4 };
     return r;
 }
 
@@ -2785,7 +2783,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_dotDragId >= 0) {   // 圆点拖动结束
             int id = g_dotDragId;
             g_dotDragId = -1;
-            if (g_dotShowPending) { g_tabHidden[id] = false; g_tab = id; }
+            POINT up = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+            int mvx = up.x - g_dotPress.x, mvy = up.y - g_dotPress.y;
+            bool clickOnly = (mvx * mvx + mvy * mvy) <= 25;   // 位移很小 = 单击圆点
+            RECT trNow = TabRect(0);
+            bool overTabs = (up.y >= trNow.top - 14 && up.y <= trNow.bottom + 10);
+            if (clickOnly || overTabs) { g_tabHidden[id] = false; g_tab = id; }   // 单击或拖回页签行 = 还原
             g_dotShowPending = false;
             ReleaseCapture();
             SaveIni();
@@ -3030,11 +3033,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_mode == M_SEARCH) {
             bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
             bool onTabRow = false;
-            for (int i = 0; i < kTabCount; ++i) {
-                RECT tr = TabRect(i);
-                if (mp.x >= tr.left && mp.x < tr.right && mp.y >= tr.top && mp.y < tr.bottom) { onTabRow = true; break; }
+            {
+                RECT t0 = TabRect(0);
+                int visN2 = 0; int tmpIds[kTabCount];
+                visN2 = VisibleTabs(tmpIds);
+                if (mp.y >= t0.top - 14 && mp.y <= t0.bottom + 4 && mp.x >= t0.left - 4 && mp.x <= t0.left + visN2 * 52 + 8) onTabRow = true;
             }
-            if (shiftDown || onTabRow) {   // Shift+滚轮（任意位置）或滚轮落在页签行上：切页签
+            if (shiftDown || onTabRow) {   // Shift+滚轮 或 光标在页签带（含缝隙/圆点区）
                 int visW[kTabCount]; int vnW = VisibleTabs(visW);
                 int pos = 0;
                 for (int i = 0; i < vnW; ++i) if (visW[i] == g_tab) { pos = i; break; }
