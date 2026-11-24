@@ -1073,6 +1073,10 @@ static RECT RowRect(int i) {
     return r;
 }
 
+static int g_tabScroll = 0;
+static int g_tabCap = 7;
+static RECT g_arrowL = {0,0,0,0};
+static RECT g_arrowR = {0,0,0,0};
 static RECT TabRect(int i);
 static int VisibleTabs(int* out) {
     int n = 0;
@@ -1119,14 +1123,13 @@ static int TabPosFromPoint(POINT pt) {
     return -1;
 }
 
-static RECT TabRect(int i) {
+static RECT TabRect(int i) {   // i = 可见页签序号；溢出时按 g_tabScroll 偏移
     RECT p = PanelRect();
-    int w = 48, gap = 4;   // 搜索页签更窄
     RECT r;
-    r.left = p.left + 16 + i * (w + gap);
-    r.right = r.left + w;
+    r.left = p.left + 16 + (i - g_tabScroll) * 52;
+    r.right = r.left + 48;
     r.top = p.top + 24;
-    r.bottom = r.top + 22;   // 页签底边紧贴面板顶边
+    r.bottom = r.top + 22;
     return r;
 }
 
@@ -1138,6 +1141,24 @@ static RECT IconRect(int i) {   // 只保留设置（齿轮），忽略参数
     r.top = (g_mode == M_SEARCH) ? (p.top + 28) : (p.top + 5);   // 搜索页与页签行同一行（页签 y=24..46）
     r.bottom = r.top + 14;   // 29..43 → 中心 36（与 Ctrl 行一致）
     return r;
+}
+
+static void ComputeTabLayout() {
+    RECT p = PanelRect();
+    int right = (g_mode == M_SEARCH) ? (IconRect(0).left - 10) : (p.right - 16);
+    int vis[kTabCount]; int n = VisibleTabs(vis);
+    int avail = right - (p.left + 16);
+    int cap = avail / 52; if (cap < 1) cap = 1;
+    if (n > cap) { cap -= 2; if (cap < 1) cap = 1; }
+    g_tabCap = cap;
+    int cur = 0; for (int i = 0; i < n; ++i) if (vis[i] == g_tab) cur = i;
+    if (g_tabScroll > n - cap) g_tabScroll = n - cap;
+    if (g_tabScroll < 0) g_tabScroll = 0;
+    if (cur < g_tabScroll) g_tabScroll = cur;
+    if (cur >= g_tabScroll + cap) g_tabScroll = cur - cap + 1;
+    int ax = p.left + 16;
+    g_arrowL = { ax - 2, p.top + 24, ax + 18, p.top + 46 };
+    g_arrowR = { right - 18, p.top + 24, right, p.top + 46 };
 }
 
 static void UpdateScrollInfo() {
@@ -1784,6 +1805,18 @@ static void DrawTabs(HDC dc) {
             DeleteObject(b);
         }
         (void)p;
+    }
+    {   // 溢出：左右翻页
+        int visA[kTabCount]; int nA = VisibleTabs(visA);
+        if (nA > g_tabCap) {
+            HFONT af = MakeFont(15);
+            HGDIOBJ ao = SelectObject(dc, af);
+            SetBkMode(dc, TRANSPARENT);
+            if (g_tabScroll > 0) { FillRound(dc, g_arrowL, 5, RGB(40,40,44), RGB(70,70,78)); SetTextColor(dc, RGB(230,232,238)); DrawTextW(dc, L"<", -1, &g_arrowL, DT_CENTER|DT_VCENTER|DT_SINGLELINE); }
+            if (g_tabScroll + g_tabCap < nA) { FillRound(dc, g_arrowR, 5, RGB(40,40,44), RGB(70,70,78)); SetTextColor(dc, RGB(230,232,238)); DrawTextW(dc, L">", -1, &g_arrowR, DT_CENTER|DT_VCENTER|DT_SINGLELINE); }
+            SelectObject(dc, ao);
+            DeleteObject(af);
+        }
     }
     // ---- 拖动反馈 ----
     {
@@ -2824,6 +2857,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     case WM_LBUTTONDOWN: {
+        if (g_mode == M_SEARCH) {   // 溢出箭头
+            POINT ap = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+            int visA2[kTabCount]; int nA2 = VisibleTabs(visA2);
+            if (ap.x >= g_arrowL.left && ap.x < g_arrowL.right && ap.y >= g_arrowL.top && ap.y < g_arrowL.bottom && g_tabScroll > 0) { --g_tabScroll; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            if (ap.x >= g_arrowR.left && ap.x < g_arrowR.right && ap.y >= g_arrowR.top && ap.y < g_arrowR.bottom && g_tabScroll + g_tabCap < nA2) { ++g_tabScroll; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+        }
         if (g_mode == M_SEARCH) {   // 页签拖动排序
             POINT tp0 = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
             int pos0 = TabPosFromPoint(tp0);
