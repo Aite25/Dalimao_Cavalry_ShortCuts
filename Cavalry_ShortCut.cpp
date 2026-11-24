@@ -1084,8 +1084,15 @@ static RECT DotRectAt(int orderIndex) {
     RECT tr = TabRect(0);
     int visBefore = 0;
     for (int i = 0; i < orderIndex; ++i) { int id = g_tabOrder[i]; if (!g_tabHidden[id]) ++visBefore; }
-    int cx = p.left + 16 + visBefore * 52;   // 该页签插入位置的缝隙中心（页签间距 4 → 缝隙中心）
-    int cy = tr.top - 9;                     // 页签行上方
+    // 同一缝隙处的连续隐藏页签：并排显示，整体以缝隙中心对齐
+    int k = 0, total = 0;
+    for (int i = orderIndex; i >= 0 && g_tabHidden[g_tabOrder[i]]; --i) ++k;
+    k = k - 1;   // 本圆点在这一段里的序号（0 起）
+    for (int i = orderIndex - k; i < kTabCount && g_tabHidden[g_tabOrder[i]]; ++i) ++total;
+    int gapCx = p.left + 16 + visBefore * 52;   // 缝隙中心
+    const int step = 12;
+    int cx = gapCx + (k - (total - 1) / 2) * step;
+    int cy = tr.top - 9;
     RECT r = { cx - 4, cy - 4, cx + 4, cy + 4 };
     return r;
 }
