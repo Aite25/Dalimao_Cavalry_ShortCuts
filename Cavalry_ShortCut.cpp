@@ -1,4 +1,4 @@
-﻿// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
+// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
 //
 // 参考 AE 插件 DalimaoShortcuts 的热盒：
 //   · 径向 8 扇区（N/NE/E/SE/S/SW/W/NW）+ 中心圆
@@ -1818,12 +1818,14 @@ static void DrawTabs(HDC dc) {
     RestoreDC(dc, dcSaved2);
     {   // 溢出：左右翻页
         int visA[kTabCount]; int nA = VisibleTabs(visA);
-        if (nA > g_tabCap) {
+        int availA = (p.right - 16) - (p.left + 16);
+        bool overflowA = (nA * 52 > availA);
+        if (overflowA) {
             HFONT af = MakeFont(15);
             HGDIOBJ ao = SelectObject(dc, af);
             SetBkMode(dc, TRANSPARENT);
             if (g_tabScroll > 0) { FillRound(dc, g_arrowL, 5, RGB(40,40,44), RGB(70,70,78)); SetTextColor(dc, RGB(230,232,238)); DrawTextW(dc, L"<", -1, &g_arrowL, DT_CENTER|DT_VCENTER|DT_SINGLELINE); }
-            if (g_tabScroll + g_tabCap < nA) { FillRound(dc, g_arrowR, 5, RGB(40,40,44), RGB(70,70,78)); SetTextColor(dc, RGB(230,232,238)); DrawTextW(dc, L">", -1, &g_arrowR, DT_CENTER|DT_VCENTER|DT_SINGLELINE); }
+            if (g_tabScroll < nA - 1) { FillRound(dc, g_arrowR, 5, RGB(40,40,44), RGB(70,70,78)); SetTextColor(dc, RGB(230,232,238)); DrawTextW(dc, L">", -1, &g_arrowR, DT_CENTER|DT_VCENTER|DT_SINGLELINE); }
             SelectObject(dc, ao);
             DeleteObject(af);
         }
@@ -2878,7 +2880,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             POINT ap = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
             int visA2[kTabCount]; int nA2 = VisibleTabs(visA2);
             if (ap.x >= g_arrowL.left && ap.x < g_arrowL.right && ap.y >= g_arrowL.top && ap.y < g_arrowL.bottom && g_tabScroll > 0) { --g_tabScroll; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
-            if (ap.x >= g_arrowR.left && ap.x < g_arrowR.right && ap.y >= g_arrowR.top && ap.y < g_arrowR.bottom && g_tabScroll + g_tabCap < nA2) { ++g_tabScroll; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            if (ap.x >= g_arrowR.left && ap.x < g_arrowR.right && ap.y >= g_arrowR.top && ap.y < g_arrowR.bottom && g_tabScroll < nA2 - 1) { ++g_tabScroll; InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         }
         if (g_mode == M_SEARCH) {   // 页签拖动排序
             POINT tp0 = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
