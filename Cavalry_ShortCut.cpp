@@ -1,4 +1,4 @@
-// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
+﻿// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
 //
 // 参考 AE 插件 DalimaoShortcuts 的热盒：
 //   · 径向 8 扇区（N/NE/E/SE/S/SW/W/NW）+ 中心圆
@@ -1253,7 +1253,7 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
     RECT p = PanelRect();
     {   // 背景只覆盖搜索区（页签行留空，AE 风格）
         RECT tr0 = TabRect(0);
-        RECT bg = { p.left, tr0.top - 6, p.right, p.bottom };
+        RECT bg = { p.left, tr0.bottom + 10, p.right, p.bottom };   // 面板顶边在页签行下方，页签完全在面板外
         FillRound(dc, bg, 14, kPanelFill, kPanelBorder);
     }
 
