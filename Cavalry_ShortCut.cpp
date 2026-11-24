@@ -2244,6 +2244,7 @@ static void ClampPieToWorkArea(HWND hwnd, int margin = 6) {
     int nx = wr.left, ny = wr.top;
     if (right - left + margin * 2 <= work.right - work.left) {
         if (left < work.left + margin) nx += (work.left + margin) - left;
+        if (right > work.right - margin) nx -= right - (work.right - margin);   // 右侧保护（按所在显示器工作区）
     }
     if (bottom - top + margin * 2 <= work.bottom - work.top) {
         if (top < work.top + margin) ny += (work.top + margin) - top;
@@ -2272,6 +2273,7 @@ static void ClampPanelToWorkArea(HWND hwnd, int margin = 2) {
     int nx = wr.left, ny = wr.top;
     if (right - left + margin * 2 <= work.right - work.left) {
         if (left < work.left + margin) nx += (work.left + margin) - left;
+        if (right > work.right - margin) nx -= right - (work.right - margin);   // 右侧保护（按所在显示器工作区）
         if (right > work.right - margin) nx -= right - (work.right - margin);
     } else {
         nx = work.left + (work.right - work.left - (right - left)) / 2 - kPadX - pr.left;
