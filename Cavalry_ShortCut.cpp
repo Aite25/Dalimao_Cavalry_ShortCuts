@@ -2108,6 +2108,7 @@ static void SaveIni() {
     s += L"panelw=" + std::to_wstring(g_winW) + L"\r\n";
     s += L"panelh=" + std::to_wstring(g_winH) + L"\r\n";
     WriteFileUtf8(ExeDir() + L"\\Cavalry_ShortCut.ini", Narrow(s));
+    Log("save ini panel " + std::to_string(g_winW) + "x" + std::to_string(g_winH));
 }
 
 static void LoadConfig() {
@@ -2126,6 +2127,7 @@ static void LoadConfig() {
             int v = _wtoi(Trim(Widen(line.substr(7))).c_str());
             if (line[5] == 'w' && v >= 320 && v <= 2400) g_winW = v;
             if (line[5] == 'h' && v >= 300 && v <= 1800) g_winH = v;
+            Log("load ini panel " + std::to_string(g_winW) + "x" + std::to_string(g_winH));
             return;
         }
         if (line.rfind("taborder=", 0) == 0) {
