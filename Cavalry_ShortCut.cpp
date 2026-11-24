@@ -1723,6 +1723,7 @@ static void DrawTabs(HDC dc) {
         int id = vis[pos];
         RECT r = TabRect(pos);
         bool on = (id == g_tab);
+        FillRound(dc, r, 6, on ? RGB(52, 54, 60) : RGB(34, 34, 38), on ? RGB(66, 68, 76) : RGB(44, 44, 50));
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(255, 255, 255) : RGB(150, 150, 155));
@@ -2636,6 +2637,35 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             return 0;
         }
+        if (g_mode == M_SEARCH && (g_tabDragFrom >= 0 || g_dotDragId >= 0)) {   // 页签 / 圆点拖动
+            POINT dp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+            int vis[kTabCount]; int vn = VisibleTabs(vis);
+            RECT tr0 = TabRect(0);
+            if (g_tabDragFrom >= 0) {
+                g_tabHidePending = (dp.y < tr0.top - 8);
+                if (!g_tabHidePending && g_tabDragFrom < vn) {
+                    int toPos = TabPosFromPoint(dp);
+                    if (toPos >= 0 && toPos < vn && toPos != g_tabDragFrom) {
+                        int a = vis[g_tabDragFrom], b = vis[toPos], ia = -1, ib = -1;
+                        for (int q = 0; q < kTabCount; ++q) { if (g_tabOrder[q] == a) ia = q; if (g_tabOrder[q] == b) ib = q; }
+                        if (ia >= 0 && ib >= 0) { std::swap(g_tabOrder[ia], g_tabOrder[ib]); g_tabDragFrom = toPos; InvalidateRect(hwnd, nullptr, TRUE); }
+                    }
+                }
+                return 0;
+            }
+            if (g_dotDragId >= 0) {
+                g_dotShowPending = (dp.y >= tr0.top - 6 && dp.y <= tr0.bottom + 6);
+                if (!g_dotShowPending) {
+                    int target = DotAtPoint(dp);
+                    if (target >= 0 && target != g_dotDragId) {
+                        int ia = -1, ib = -1;
+                        for (int q = 0; q < kTabCount; ++q) { if (g_tabOrder[q] == g_dotDragId) ia = q; if (g_tabOrder[q] == target) ib = q; }
+                        if (ia >= 0 && ib >= 0) { std::swap(g_tabOrder[ia], g_tabOrder[ib]); InvalidateRect(hwnd, nullptr, TRUE); }
+                    }
+                }
+                return 0;
+            }
+        }
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
         if (g_mode == M_PIE) {
             int h = HitTestPie(p);
@@ -2753,12 +2783,19 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         if (g_tabDragFrom >= 0) {
-            POINT tp1 = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
-            int pos1 = TabPosFromPoint(tp1);
-            if (pos1 == g_tabDragFrom || pos1 < 0) g_tab = g_tabOrder[g_tabDragFrom];
-            SaveIni();
+            int vis[kTabCount]; int vn = VisibleTabs(vis);
+            int id = (g_tabDragFrom < vn) ? vis[g_tabDragFrom] : -1;
+            if (g_tabHidePending && id >= 0) {   // 拖到上方 → 收成小圆点
+                g_tabHidden[id] = true;
+                int v2[kTabCount]; int n2 = VisibleTabs(v2);
+                if (n2 > 0) g_tab = v2[0];
+            } else if (id >= 0) {
+                g_tab = id;
+            }
+            g_tabHidePending = false;
             g_tabDragFrom = -1;
             ReleaseCapture();
+            SaveIni();
             UpdateResults();
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
