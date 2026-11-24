@@ -2310,6 +2310,7 @@ static void ShowAtCursor(HWND hwnd) {
     UpdateWindow(hwnd);   // 先按"圆盘"画好，再显示
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, winW, winH, cavFrontAtShow ? SWP_SHOWWINDOW : (SWP_SHOWWINDOW | SWP_NOACTIVATE));
     SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, winW, winH, 0);
+    ClampPanelToWorkArea(hwnd, 6);   // 边缘保护：圆盘也保证整体在屏幕内
     InvalidateRect(hwnd, nullptr, TRUE);
     UpdateWindow(hwnd);   // 显示后立刻补画一帧，抵消首帧残影
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
