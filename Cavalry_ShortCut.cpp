@@ -2128,7 +2128,7 @@ static void LoadConfig() {
             if (line[5] == 'w' && v >= 320 && v <= 2400) g_winW = v;
             if (line[5] == 'h' && v >= 300 && v <= 1800) g_winH = v;
             Log("load ini panel " + std::to_string(g_winW) + "x" + std::to_string(g_winH));
-            return;
+            continue;
         }
         if (line.rfind("taborder=", 0) == 0) {
             std::wstring v = Trim(Widen(line.substr(9)));
@@ -2141,12 +2141,12 @@ static void LoadConfig() {
                 if (comma == std::wstring::npos) break;
                 pos = comma + 1;
             }
-            return;
+            continue;
         }
         if (line.rfind("opsmode=", 0) == 0) {
             std::wstring v = Trim(Widen(line.substr(8)));
             g_opsUseKeys = (ToLower(v) != L"mcp");
-            return;
+            continue;
         }
         if (line.rfind("ime=", 0) == 0) {
             g_imeOn = (line.find("off") == std::string::npos);
@@ -2161,7 +2161,7 @@ static void LoadConfig() {
             } else if (ParseHotkey(spec, mods, vk)) {
                 g_hotkeySpec = spec; g_hotkeyMods = mods; g_hotkeyVk = vk;
             }
-            return;
+            continue;
         }
     }
 }
