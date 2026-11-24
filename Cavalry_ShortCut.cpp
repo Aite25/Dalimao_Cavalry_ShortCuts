@@ -1,4 +1,4 @@
-﻿// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
+// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
 //
 // 参考 AE 插件 DalimaoShortcuts 的热盒：
 //   · 径向 8 扇区（N/NE/E/SE/S/SW/W/NW）+ 中心圆
@@ -1064,7 +1064,7 @@ static RECT RowRect(int i) {
     RECT r;
     r.left = p.left + 16;
     r.right = p.right - 34;
-    r.top = p.top + 132 + i * 30;
+    r.top = p.top + 88 + i * 30;
     r.bottom = r.top + 30;   // 行高 30（与 VisibleRows/命中判定一致）
     return r;
 }
@@ -1076,21 +1076,26 @@ static int VisibleTabs(int* out) {
     return n;
 }
 
-static RECT DotRect(int dotIndex) {   // 隐藏页签的小圆点（页签行右侧）
+static POINT g_dotPress = {0, 0};
+
+// 隐藏页签的小圆点：画在"它本该插入的两个页签之间"
+static RECT DotRectAt(int orderIndex) {
     RECT p = PanelRect();
     RECT tr = TabRect(0);
-    int cy = p.top + 10;   // 页签上方一行
-    int cx = p.left + 20 + dotIndex * 16;
+    int visBefore = 0;
+    for (int i = 0; i < orderIndex; ++i) { int id = g_tabOrder[i]; if (!g_tabHidden[id]) ++visBefore; }
+    int cx = p.left + 16 + visBefore * 52 + 22;
+    int cy = (tr.top + tr.bottom) / 2;
     RECT r = { cx - 6, cy - 6, cx + 6, cy + 6 };
     return r;
 }
 
 static int DotAtPoint(POINT pt) {   // 返回 tab id，或 -1
-    int hid[kTabCount], n = 0;
-    for (int i = 0; i < kTabCount; ++i) { int id = g_tabOrder[i]; if (g_tabHidden[id]) hid[n++] = id; }
-    for (int i = 0; i < n; ++i) {
-        RECT r = DotRect(i);
-        if (pt.x >= r.left && pt.x < r.right && pt.y >= r.top && pt.y < r.bottom) return hid[i];
+    for (int i = 0; i < kTabCount; ++i) {
+        int id = g_tabOrder[i];
+        if (!g_tabHidden[id]) continue;
+        RECT r = DotRectAt(i);
+        if (pt.x >= r.left && pt.x < r.right && pt.y >= r.top && pt.y < r.bottom) return id;
     }
     return -1;
 }
@@ -1109,8 +1114,8 @@ static RECT TabRect(int i) {
     RECT r;
     r.left = p.left + 16 + i * (w + gap);
     r.right = r.left + w;
-    r.top = p.top + 30;
-    r.bottom = r.top + 22;   // 页签独立一行，位于面板上方
+    r.top = p.top + 24;
+    r.bottom = r.top + 22;   // 页签底边紧贴面板顶边
     return r;
 }
 
@@ -1245,7 +1250,7 @@ static void DrawPie(HDC dc) {
 
 static RECT InputRect() {
     RECT p = PanelRect();
-    RECT r = { p.left + 16, p.top + 86, p.right - 16, p.top + 118 };
+    RECT r = { p.left + 16, p.top + 54, p.right - 16, p.top + 84 };
     return r;
 }
 
@@ -1253,7 +1258,7 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
     RECT p = PanelRect();
     {   // 背景只覆盖搜索区（页签行留空，AE 风格）
         RECT tr0 = TabRect(0);
-        RECT bg = { p.left, tr0.bottom + 10, p.right, p.bottom };   // 面板顶边在页签行下方，页签完全在面板外
+        RECT bg = { p.left, tr0.bottom, p.right, p.bottom };   // 面板顶边紧贴页签底边
         FillRound(dc, bg, 14, kPanelFill, kPanelBorder);
     }
 
@@ -1262,7 +1267,7 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
     HFONT ft = MakeFont(15);
     HGDIOBJ of = SelectObject(dc, ft);
     SetTextColor(dc, RGB(140, 140, 140));
-    RECT tr = { p.left + 16, p.top + 64, p.right - 16, p.top + 84 };
+    RECT tr = { p.left + 16, p.top + 2, p.right - 16, p.top + 22 };   // 标题在页签左上方（面板外）
     DrawTextW(dc, title.c_str(), -1, &tr, DT_LEFT | DT_SINGLELINE);
     SelectObject(dc, of);
     DeleteObject(ft);
@@ -1745,7 +1750,7 @@ static void DrawTabs(HDC dc) {
         for (int i = 0; i < kTabCount; ++i) {
             int id = g_tabOrder[i];
             if (!g_tabHidden[id]) continue;
-            RECT dr = DotRect(d);
+            RECT dr = DotRectAt(i);
             HBRUSH b = CreateSolidBrush(id == g_hoverDotId ? RGB(255, 255, 255) : (id == g_tab ? kRowSel : RGB(70, 72, 78)));
             HGDIOBJ ob = SelectObject(dc, b);
             HGDIOBJ op = SelectObject(dc, GetStockObject(NULL_PEN));
@@ -1753,7 +1758,6 @@ static void DrawTabs(HDC dc) {
             SelectObject(dc, op);
             SelectObject(dc, ob);
             DeleteObject(b);
-            ++d;
         }
         (void)p;
     }
@@ -2736,7 +2740,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             int pos0 = TabPosFromPoint(tp0);
             if (pos0 >= 0) { g_tabDragFrom = pos0; SetCapture(hwnd); return 0; }
             int dotId0 = DotAtPoint(tp0);
-            if (dotId0 >= 0) { g_dotDragId = dotId0; SetCapture(hwnd); return 0; }
+            if (dotId0 >= 0) { g_dotDragId = dotId0; g_dotPress = tp0; SetCapture(hwnd); return 0; }
         }
         {
             int ex = (int)GET_X_LPARAM(lp), ey = (int)GET_Y_LPARAM(lp);
