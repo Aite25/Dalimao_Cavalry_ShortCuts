@@ -1045,7 +1045,7 @@ static int HitTestPie(POINT p) {
 
 static RECT PanelRect() {
     RECT r;
-    r.left = 24; r.top = 24; r.right = g_winW - 14; r.bottom = g_winH - 14;
+    r.left = 24; r.top = 24; r.right = g_winW - 14; r.bottom = g_winH - 40;   // 底部留 26px 放面板外提示
     return r;
 }
 
@@ -1274,7 +1274,7 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
     HFONT ft = MakeFont(15);
     HGDIOBJ of = SelectObject(dc, ft);
     SetTextColor(dc, RGB(140, 140, 140));
-    RECT tr = { p.left + 16, p.top - 18, p.right - 16, p.top + 2 };   // 标题移到小圆点更上方
+    RECT tr = { p.left + 16, p.bottom + 4, p.right - 16, p.bottom + 24 };   // 提示放面板外左下方
     DrawTextW(dc, title.c_str(), -1, &tr, DT_LEFT | DT_SINGLELINE);
     SelectObject(dc, of);
     DeleteObject(ft);
