@@ -1082,11 +1082,13 @@ static POINT g_dotPress = {0, 0};
 static RECT DotRectAt(int orderIndex) {
     RECT p = PanelRect();
     RECT tr = TabRect(0);
-    int visBefore = 0;
-    for (int i = 0; i < orderIndex; ++i) { int id = g_tabOrder[i]; if (!g_tabHidden[id]) ++visBefore; }
-    int cx = p.left + 16 + visBefore * 52 + 22;
+    int visCount = 0;
+    for (int i = 0; i < kTabCount; ++i) { int id = g_tabOrder[i]; if (!g_tabHidden[id]) ++visCount; }
+    int dotIdx = 0;
+    for (int i = 0; i < orderIndex; ++i) { int id = g_tabOrder[i]; if (g_tabHidden[id]) ++dotIdx; }
+    int cx = p.left + 16 + visCount * 52 + 16 + dotIdx * 18;   // 页签行右侧
     int cy = (tr.top + tr.bottom) / 2;
-    RECT r = { cx - 6, cy - 6, cx + 6, cy + 6 };
+    RECT r = { cx - 7, cy - 7, cx + 7, cy + 7 };
     return r;
 }
 
@@ -1751,7 +1753,7 @@ static void DrawTabs(HDC dc) {
             int id = g_tabOrder[i];
             if (!g_tabHidden[id]) continue;
             RECT dr = DotRectAt(i);
-            HBRUSH b = CreateSolidBrush(id == g_hoverDotId ? RGB(255, 255, 255) : (id == g_tab ? kRowSel : RGB(70, 72, 78)));
+            HBRUSH b = CreateSolidBrush(id == g_hoverDotId ? RGB(255, 255, 255) : (id == g_tab ? kRowSel : RGB(150, 152, 162)));
             HGDIOBJ ob = SelectObject(dc, b);
             HGDIOBJ op = SelectObject(dc, GetStockObject(NULL_PEN));
             Ellipse(dc, dr.left, dr.top, dr.right, dr.bottom);
