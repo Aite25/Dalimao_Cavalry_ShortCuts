@@ -1,4 +1,4 @@
-﻿// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
+// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
 //
 // 参考 AE 插件 DalimaoShortcuts 的热盒：
 //   · 径向 8 扇区（N/NE/E/SE/S/SW/W/NW）+ 中心圆
@@ -2791,6 +2791,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             int vis[kTabCount]; int vn = VisibleTabs(vis);
             int id = (g_tabDragFrom < vn) ? vis[g_tabDragFrom] : -1;
             if (g_tabHidePending && id >= 0) {   // 拖到上方 → 收成小圆点
+                Log("hide tab " + Narrow(kTabs[id]));
                 g_tabHidden[id] = true;
                 int v2[kTabCount]; int n2 = VisibleTabs(v2);
                 if (n2 > 0) g_tab = v2[0];
