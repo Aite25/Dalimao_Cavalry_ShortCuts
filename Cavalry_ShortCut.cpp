@@ -140,6 +140,8 @@ static bool g_tabHidden[kTabCount] = {};   // 拖动到面板上方后变成小�
 static int g_dotDragId = -1;                 // 正在拖动的小圆点（tab id）
 static bool g_dotShowPending = false;
 static bool g_tabHidePending = false;
+static POINT g_dragPoint = {0, 0};   // 拖动中的光标位置（画跟随标签）
+static int g_dotInsertPos = -1;      // 圆点拖动时的插入位置（可见页签序号）
 static int g_hoverDotId = -1;
 static int g_tabDragFrom = -1;   // 拖拽起点（位置）
 static bool g_captureHotkey = false;   // 设置页正在捕获快捷键
@@ -1781,6 +1783,51 @@ static void DrawTabs(HDC dc) {
         }
         (void)p;
     }
+    // ---- 拖动反馈 ----
+    {
+        int visF[kTabCount]; int nF = VisibleTabs(visF);
+        RECT t0 = TabRect(0);
+        if (g_tabDragFrom >= 0) {
+            int pos = (g_tabDragFrom < nF) ? g_tabDragFrom : nF - 1;
+            if (!g_tabHidePending && pos >= 0) {
+                RECT tr = TabRect(pos);
+                RECT bar = { tr.left - 2, tr.top - 3, tr.left + 2, tr.bottom + 3 };
+                HBRUSH bb = CreateSolidBrush(RGB(255, 255, 255));
+                FillRect(dc, &bar, bb); DeleteObject(bb);
+            }
+            if (g_tabDragFrom < nF) {
+                const wchar_t* nm = kTabs[visF[g_tabDragFrom]];
+                HFONT gf = MakeFont(14);
+                HGDIOBJ go = SelectObject(dc, gf);
+                SIZE sz = {0,0}; GetTextExtentPoint32W(dc, nm, (int)wcslen(nm), &sz);
+                RECT gr = { g_dragPoint.x - sz.cx / 2 - 8, g_dragPoint.y - 30, g_dragPoint.x + sz.cx / 2 + 8, g_dragPoint.y - 8 };
+                FillRound(dc, gr, 5, RGB(52, 54, 60), RGB(120, 122, 130));
+                SetBkMode(dc, TRANSPARENT);
+                SetTextColor(dc, RGB(240, 242, 246));
+                DrawTextW(dc, g_tabHidePending ? L"松手隐藏" : nm, -1, &gr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                SelectObject(dc, go); DeleteObject(gf);
+            }
+        }
+        if (g_dotDragId >= 0) {
+            int pos = g_dotInsertPos;
+            if (pos < 0) pos = 0;
+            if (pos > nF) pos = nF;
+            int x = t0.left + pos * 52 - 2;
+            RECT bar = { x, t0.top - 3, x + 4, t0.bottom + 3 };
+            HBRUSH bb = CreateSolidBrush(RGB(255, 255, 255));
+            FillRect(dc, &bar, bb); DeleteObject(bb);
+            const wchar_t* nm = kTabs[g_dotDragId];
+            HFONT gf = MakeFont(14);
+            HGDIOBJ go = SelectObject(dc, gf);
+            SIZE sz = {0,0}; GetTextExtentPoint32W(dc, nm, (int)wcslen(nm), &sz);
+            RECT gr = { g_dragPoint.x - sz.cx / 2 - 8, g_dragPoint.y - 30, g_dragPoint.x + sz.cx / 2 + 8, g_dragPoint.y - 8 };
+            FillRound(dc, gr, 5, RGB(52, 54, 60), RGB(120, 122, 130));
+            SetBkMode(dc, TRANSPARENT);
+            SetTextColor(dc, RGB(240, 242, 246));
+            DrawTextW(dc, nm, -1, &gr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(dc, go); DeleteObject(gf);
+        }
+    }
 }
 
 static void DrawTopIcons(HDC dc) {
@@ -2665,6 +2712,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         if (g_mode == M_SEARCH && (g_tabDragFrom >= 0 || g_dotDragId >= 0)) {   // 页签 / 圆点拖动
             POINT dp = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+            g_dragPoint = dp;
             int vis[kTabCount]; int vn = VisibleTabs(vis);
             RECT tr0 = TabRect(0);
             if (g_tabDragFrom >= 0) {
@@ -2683,6 +2731,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 g_dotShowPending = (dp.y >= tr0.top - 6 && dp.y <= tr0.bottom + 6);
                 if (!g_dotShowPending) {
                     int target = DotAtPoint(dp);
+                {
+                    RECT t0i = TabRect(0);
+                    int visIds2[kTabCount]; int vn2 = VisibleTabs(visIds2);
+                    g_dotInsertPos = 0;
+                    for (int q = 0; q < vn2; ++q) { RECT tq = TabRect(q); if (dp.x > (tq.left + tq.right) / 2) g_dotInsertPos = q + 1; }
+                }
                     if (target >= 0 && target != g_dotDragId) {
                         int from = -1, to = -1;
                         for (int q = 0; q < kTabCount; ++q) { if (g_tabOrder[q] == g_dotDragId) from = q; if (g_tabOrder[q] == target) to = q; }
