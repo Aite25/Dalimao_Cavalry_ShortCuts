@@ -2670,8 +2670,16 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (!g_dotShowPending) {
                     int target = DotAtPoint(dp);
                     if (target >= 0 && target != g_dotDragId) {
+                        int from = -1, to = -1;
+                        for (int q = 0; q < kTabCount; ++q) { if (g_tabOrder[q] == g_dotDragId) from = q; if (g_tabOrder[q] == target) to = q; }
+                        if (from >= 0 && to >= 0 && from != to) {   // 把拖动中的圆点移动到目标位置（插入式）
+                            int moved = g_tabOrder[from];
+                            if (from < to) { for (int q = from; q < to; ++q) g_tabOrder[q] = g_tabOrder[q + 1]; }
+                            else { for (int q = from; q > to; --q) g_tabOrder[q] = g_tabOrder[q - 1]; }
+                            g_tabOrder[to] = moved;
+                            InvalidateRect(hwnd, nullptr, TRUE);
+                        }
                         int ia = -1, ib = -1;
-                        for (int q = 0; q < kTabCount; ++q) { if (g_tabOrder[q] == g_dotDragId) ia = q; if (g_tabOrder[q] == target) ib = q; }
                         if (ia >= 0 && ib >= 0) { std::swap(g_tabOrder[ia], g_tabOrder[ib]); InvalidateRect(hwnd, nullptr, TRUE); }
                     }
                 }
