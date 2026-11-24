@@ -1767,7 +1767,7 @@ static void DrawTabs(HDC dc) {
                 HFONT tf = MakeFont(13);
                 HGDIOBJ to = SelectObject(dc, tf);
                 SIZE szo = {0,0}; GetTextExtentPoint32W(dc, nm, (int)wcslen(nm), &szo);
-                RECT box = { dr.right + 6, dr.top - 6, dr.right + 12 + szo.cx + 8, dr.bottom + 8 };
+                RECT box = { (dr.left + dr.right) / 2 - szo.cx / 2 - 8, dr.top - 26, (dr.left + dr.right) / 2 + szo.cx / 2 + 8, dr.top - 6 };   // 提示放圆点上方
                 FillRound(dc, box, 5, RGB(46, 46, 52), RGB(96, 98, 106));
                 SetBkMode(dc, TRANSPARENT);
                 SetTextColor(dc, RGB(240, 242, 246));
