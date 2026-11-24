@@ -140,6 +140,7 @@ static bool g_tabHidden[kTabCount] = {};   // 拖动到面板上方后变成小�
 static int g_dotDragId = -1;                 // 正在拖动的小圆点（tab id）
 static bool g_dotShowPending = false;
 static bool g_tabHidePending = false;
+static int g_hoverDotId = -1;
 static int g_tabDragFrom = -1;   // 拖拽起点（位置）
 static bool g_captureHotkey = false;   // 设置页正在捕获快捷键
 static int g_searchRows = 0;   // 0 = 自动（按窗口高度算）
@@ -1745,7 +1746,7 @@ static void DrawTabs(HDC dc) {
             int id = g_tabOrder[i];
             if (!g_tabHidden[id]) continue;
             RECT dr = DotRect(d);
-            HBRUSH b = CreateSolidBrush(id == g_tab ? kRowSel : RGB(70, 72, 78));
+            HBRUSH b = CreateSolidBrush(id == g_hoverDotId ? RGB(255, 255, 255) : (id == g_tab ? kRowSel : RGB(70, 72, 78)));
             HGDIOBJ ob = SelectObject(dc, b);
             HGDIOBJ op = SelectObject(dc, GetStockObject(NULL_PEN));
             Ellipse(dc, dr.left, dr.top, dr.right, dr.bottom);
@@ -2667,6 +2668,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
         }
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+        if (g_mode == M_SEARCH) {
+            int hd = DotAtPoint(p);
+            if (hd != g_hoverDotId) { g_hoverDotId = hd; InvalidateRect(hwnd, nullptr, FALSE); }
+        }
         if (g_mode == M_PIE) {
             int h = HitTestPie(p);
             int hv = (h >= 0) ? h : -1;
@@ -3023,10 +3028,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (mp.x >= tr.left && mp.x < tr.right && mp.y >= tr.top && mp.y < tr.bottom) { onTabRow = true; break; }
             }
             if (shiftDown || onTabRow) {   // Shift+滚轮（任意位置）或滚轮落在页签行上：切页签
+                int visW[kTabCount]; int vnW = VisibleTabs(visW);
                 int pos = 0;
-                for (int i = 0; i < kTabCount; ++i) if (g_tabOrder[i] == g_tab) { pos = i; break; }
-                pos = (pos + (delta > 0 ? kTabCount - 1 : 1)) % kTabCount;
-                g_tab = g_tabOrder[pos];
+                for (int i = 0; i < vnW; ++i) if (visW[i] == g_tab) { pos = i; break; }
+                if (vnW > 0) pos = (pos + (delta > 0 ? vnW - 1 : 1)) % vnW;
+                if (vnW > 0) g_tab = visW[pos];
                 g_sel = 0; g_scroll = 0;
                 UpdateResults();
                 InvalidateRect(hwnd, nullptr, TRUE);
@@ -3040,10 +3046,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_mode == M_SETTINGS) {   // 设置页：滚轮翻页签（页签行上或按住 Shift）
             bool onTabs2 = (SetTabPosFromPoint(mp) >= 0);
             if (onTabs2 || (GetKeyState(VK_SHIFT) & 0x8000)) {
+                int visW[kTabCount]; int vnW = VisibleTabs(visW);
                 int pos = 0;
-                for (int i = 0; i < kTabCount; ++i) if (g_tabOrder[i] == g_tab) { pos = i; break; }
-                pos = (pos + (delta > 0 ? kTabCount - 1 : 1)) % kTabCount;
-                g_tab = g_tabOrder[pos];
+                for (int i = 0; i < vnW; ++i) if (visW[i] == g_tab) { pos = i; break; }
+                if (vnW > 0) pos = (pos + (delta > 0 ? vnW - 1 : 1)) % vnW;
+                if (vnW > 0) g_tab = visW[pos];
                 g_selSearch = 0; g_scroll = 0;
                 UpdateResults();
                 InvalidateRect(hwnd, nullptr, TRUE);
@@ -3086,7 +3093,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             bool c = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
             bool s = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
             if (c && wp >= '1' && wp <= '6') { g_sel = g_scroll + (int)(wp - '1'); ExecSelected(); return 0; }
-            if (wp == VK_TAB) { g_tab = (g_tab + (s ? kTabCount - 1 : 1)) % kTabCount; g_sel = 0; g_scroll = 0; UpdateResults(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+            if (wp == VK_TAB) { int visT[kTabCount]; int vnT = VisibleTabs(visT); if (vnT > 0) { int posT = 0; for (int i = 0; i < vnT; ++i) if (visT[i] == g_tab) { posT = i; break; } posT = (posT + (s ? vnT - 1 : 1)) % vnT; g_tab = visT[posT]; } g_sel = 0; g_scroll = 0; UpdateResults(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
         }
         if (g_mode == M_SEARCH && (GetKeyState(VK_CONTROL) & 0x8000) && (wp == 'A')) {
             if (g_edit) { SetFocus(g_edit); SendMessageW(g_edit, EM_SETSEL, (WPARAM)0, (LPARAM)-1); }
