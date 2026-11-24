@@ -1133,7 +1133,7 @@ static RECT IconRect(int i) {   // 只保留设置（齿轮），忽略参数
     RECT r;
     r.right = p.right - 3;
     r.left = r.right - 14;   // 正方形 14x14
-    r.top = (g_mode == M_SEARCH) ? (p.top - 22) : (p.top + 5);   // 搜索页放到面板上方（留 8px 间距）
+    r.top = (g_mode == M_SEARCH) ? (p.top + 28) : (p.top + 5);   // 搜索页与页签行同一行（页签 y=24..46）
     r.bottom = r.top + 14;   // 29..43 → 中心 36（与 Ctrl 行一致）
     return r;
 }
@@ -2089,8 +2089,8 @@ static void LoadConfig() {
         while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
         if (line.rfind("panelw=", 0) == 0 || line.rfind("panelh=", 0) == 0) {
             int v = _wtoi(Trim(Widen(line.substr(7))).c_str());
-            if (line[5] == 'w' && v >= 480 && v <= 2400) g_winW = v;
-            if (line[5] == 'h' && v >= 360 && v <= 1800) g_winH = v;
+            if (line[5] == 'w' && v >= 320 && v <= 2400) g_winW = v;
+            if (line[5] == 'h' && v >= 300 && v <= 1800) g_winH = v;
             return;
         }
         if (line.rfind("taborder=", 0) == 0) {
@@ -2678,8 +2678,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             int nw = g_winW, nh = g_winH;
             if (g_resizeEdges & 1) nw = g_resizeStartW + (rp.x - g_resizeStart.x);
             if (g_resizeEdges & 2) nh = g_resizeStartH + (rp.y - g_resizeStart.y);
-            if (nw < 480) nw = 480;
-            if (nh < 380) nh = 380;
+            if (nw < 320) nw = 320;
+            if (nh < 300) nh = 300;
             if (nw != g_winW || nh != g_winH) {
                 g_winW = nw; g_winH = nh;
                 SetWindowPos(hwnd, HWND_TOP, 0, 0, nw + kPadX * 2, nh + kPadY * 2, SWP_NOMOVE | SWP_NOZORDER);
