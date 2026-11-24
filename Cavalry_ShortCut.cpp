@@ -2231,6 +2231,27 @@ static void HideHotbox(HWND hwnd) {
     ShowWindow(hwnd, SW_HIDE);
 }
 
+// 只夹"圆盘实际可见的区域"（页签 + 8 扇区 + 中心），不把下方大片透明区算进去
+static void ClampPieToWorkArea(HWND hwnd, int margin = 6) {
+    if (!hwnd) return;
+    RECT work; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+    RECT wr; GetWindowRect(hwnd, &wr);
+    int left   = wr.left + kPadX + 24;
+    int top    = wr.top  + kPadY + 22;
+    int right  = wr.left + kPadX + (CenterX() + kOffHoriz + kRectW / 2);
+    int bottom = wr.top  + kPadY + (CenterY() + kOffVert + kRectH / 2);
+    int nx = wr.left, ny = wr.top;
+    if (right - left + margin * 2 <= work.right - work.left) {
+        if (left < work.left + margin) nx += (work.left + margin) - left;
+        if (right > work.right - margin) nx -= right - (work.right - margin);
+    }
+    if (bottom - top + margin * 2 <= work.bottom - work.top) {
+        if (top < work.top + margin) ny += (work.top + margin) - top;
+        if (bottom > work.bottom - margin) ny -= bottom - (work.bottom - margin);
+    }
+    if (nx != wr.left || ny != wr.top) SetWindowPos(hwnd, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+}
+
 static void ClampPanelToWorkArea(HWND hwnd, int margin = 8) {
     if (!hwnd) return;
     RECT work; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
@@ -2310,7 +2331,7 @@ static void ShowAtCursor(HWND hwnd) {
     UpdateWindow(hwnd);   // 先按"圆盘"画好，再显示
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, winW, winH, cavFrontAtShow ? SWP_SHOWWINDOW : (SWP_SHOWWINDOW | SWP_NOACTIVATE));
     SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, winW, winH, 0);
-    ClampPanelToWorkArea(hwnd, 6);   // 边缘保护：圆盘也保证整体在屏幕内
+    ClampPieToWorkArea(hwnd, 6);   // 边缘保护：只保证圆盘本体（页签+扇区）在屏幕内
     InvalidateRect(hwnd, nullptr, TRUE);
     UpdateWindow(hwnd);   // 显示后立刻补画一帧，抵消首帧残影
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
