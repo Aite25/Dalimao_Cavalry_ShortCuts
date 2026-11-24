@@ -1140,14 +1140,14 @@ static RECT IconRect(int i) {   // 只保留设置（齿轮），忽略参数
     RECT r;
     r.right = p.right - 3;
     r.left = r.right - 14;   // 正方形 14x14
-    r.top = (g_mode == M_SEARCH) ? (p.top + 28) : (p.top + 5);   // 搜索页与页签行同一行（页签 y=24..46）
+    r.top = (g_mode == M_SEARCH) ? (p.top + 2) : (p.top + 5);   // 搜索页：图标移到页签上方
     r.bottom = r.top + 14;   // 29..43 → 中心 36（与 Ctrl 行一致）
     return r;
 }
 
 static void ComputeTabLayout() {
     RECT p = PanelRect();
-    int right = (g_mode == M_SEARCH) ? (IconRect(0).left - 4) : (p.right - 16);
+    int right = p.right - 16;   // 图标已在页签上方，页签可占到面板右缘
     int vis[kTabCount]; int n = VisibleTabs(vis);
     g_tabCap = n;                                  // 不折叠：页签可以只露出一部分
     int avail = right - (p.left + 16);
@@ -1758,7 +1758,7 @@ static void DrawSettings(HDC dc) {
 
 static void DrawTabs(HDC dc) {
     RECT pClip = PanelRect();
-    int clipRight = (g_mode == M_SEARCH) ? (IconRect(0).left - 4) : (pClip.right - 16);
+    int clipRight = pClip.right - 16;
     int dcSaved2 = SaveDC(dc);
     IntersectClipRect(dc, pClip.left + 16, pClip.top + 20, clipRight, pClip.top + 48);
     RECT p = PanelRect();
