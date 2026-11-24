@@ -2070,6 +2070,8 @@ static void SaveIni() {
     std::wstring order;
     for (int i = 0; i < kTabCount; ++i) { if (i) order += L","; order += std::to_wstring(g_tabOrder[i]); }
     s += L"taborder=" + order + L"\r\n";
+    s += L"panelw=" + std::to_wstring(g_winW) + L"\r\n";
+    s += L"panelh=" + std::to_wstring(g_winH) + L"\r\n";
     WriteFileUtf8(ExeDir() + L"\\Cavalry_ShortCut.ini", Narrow(s));
 }
 
@@ -2085,6 +2087,12 @@ static void LoadConfig() {
         std::string line = raw.substr(pos, eol == std::string::npos ? std::string::npos : eol - pos);
         pos = (eol == std::string::npos) ? raw.size() : eol + 1;
         while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+        if (line.rfind("panelw=", 0) == 0 || line.rfind("panelh=", 0) == 0) {
+            int v = _wtoi(Trim(Widen(line.substr(7))).c_str());
+            if (line[5] == 'w' && v >= 480 && v <= 2400) g_winW = v;
+            if (line[5] == 'h' && v >= 360 && v <= 1800) g_winH = v;
+            return;
+        }
         if (line.rfind("taborder=", 0) == 0) {
             std::wstring v = Trim(Widen(line.substr(9)));
             int idx = 0; size_t pos = 0;
@@ -2902,6 +2910,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g_resizing = false; ReleaseCapture();
             ClampPanelToWorkArea(hwnd);
             if (g_mode == M_SEARCH || g_mode == M_SETTINGS) SyncEditFromMode();
+            SaveIni();   // 记住面板尺寸
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
         }
