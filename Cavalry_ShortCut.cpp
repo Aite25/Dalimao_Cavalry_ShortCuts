@@ -2232,9 +2232,10 @@ static void HideHotbox(HWND hwnd) {
 }
 
 // 只夹"圆盘实际可见的区域"（页签 + 8 扇区 + 中心），不把下方大片透明区算进去
+static bool GetWorkAreaForWindow(HWND hwnd, RECT& out);
 static void ClampPieToWorkArea(HWND hwnd, int margin = 6) {
     if (!hwnd) return;
-    RECT work; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+    RECT work; GetWorkAreaForWindow(hwnd, work);   // 多显示器：取窗口所在屏幕的工作区
     RECT wr; GetWindowRect(hwnd, &wr);
     int left   = wr.left + kPadX + (CenterX() - (kOffHoriz + kRectW / 2));   // 只算扇区，页签/icon 不参与左边界
     int top    = wr.top  + kPadY + (CenterY() - (kOffVert + kRectH / 2));    // 只算扇区，页签不参与上边界
@@ -2251,9 +2252,17 @@ static void ClampPieToWorkArea(HWND hwnd, int margin = 6) {
     if (nx != wr.left || ny != wr.top) SetWindowPos(hwnd, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
 }
 
+static bool GetWorkAreaForWindow(HWND hwnd, RECT& out) {
+    HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi = { sizeof(MONITORINFO) };
+    if (mon && GetMonitorInfoW(mon, &mi)) { out = mi.rcWork; return true; }
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &out, 0);
+    return false;
+}
+
 static void ClampPanelToWorkArea(HWND hwnd, int margin = 2) {
     if (!hwnd) return;
-    RECT work; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+    RECT work; GetWorkAreaForWindow(hwnd, work);   // 多显示器：取窗口所在屏幕的工作区
     RECT wr; GetWindowRect(hwnd, &wr);
     RECT pr = PanelRect();                       // 面板本体的边界（不是整块内容区）
     int left   = wr.left + kPadX + pr.left;
