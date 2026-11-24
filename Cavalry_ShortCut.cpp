@@ -1079,9 +1079,9 @@ static int VisibleTabs(int* out) {
 static RECT DotRect(int dotIndex) {   // 隐藏页签的小圆点（页签行右侧）
     RECT p = PanelRect();
     RECT tr = TabRect(0);
-    int cy = tr.top - 12;   // 页签行上方一行
-    int cx = p.left + 20 + dotIndex * 14;
-    RECT r = { cx - 5, cy - 5, cx + 5, cy + 5 };
+    int cy = p.top + 10;   // 页签上方一行
+    int cx = p.left + 20 + dotIndex * 16;
+    RECT r = { cx - 6, cy - 6, cx + 6, cy + 6 };
     return r;
 }
 
@@ -1109,8 +1109,8 @@ static RECT TabRect(int i) {
     RECT r;
     r.left = p.left + 16 + i * (w + gap);
     r.right = r.left + w;
-    r.top = p.top + 32;
-    r.bottom = r.top + 20;
+    r.top = p.top + 30;
+    r.bottom = r.top + 22;   // 页签独立一行，位于面板上方
     return r;
 }
 
@@ -1245,7 +1245,7 @@ static void DrawPie(HDC dc) {
 
 static RECT InputRect() {
     RECT p = PanelRect();
-    RECT r = { p.left + 16, p.top + 66, p.right - 16, p.top + 98 };
+    RECT r = { p.left + 16, p.top + 86, p.right - 16, p.top + 118 };
     return r;
 }
 
@@ -1262,7 +1262,7 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
     HFONT ft = MakeFont(15);
     HGDIOBJ of = SelectObject(dc, ft);
     SetTextColor(dc, RGB(140, 140, 140));
-    RECT tr = { p.left + 16, p.top + 10, p.right - 16, p.top + 30 };
+    RECT tr = { p.left + 16, p.top + 64, p.right - 16, p.top + 84 };
     DrawTextW(dc, title.c_str(), -1, &tr, DT_LEFT | DT_SINGLELINE);
     SelectObject(dc, of);
     DeleteObject(ft);
