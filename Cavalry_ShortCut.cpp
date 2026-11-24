@@ -136,6 +136,10 @@ static int g_tab = 0;
 static const wchar_t* kTabs[] = { L"全部", L"脚本", L"形状", L"行为", L"工具", L"效果", L"操作" };
 static const int kTabCount = 7;
 static int g_tabOrder[kTabCount] = { 0, 1, 2, 3, 4, 5, 6 };   // 显示位置 -> 页签 id
+static bool g_tabHidden[kTabCount] = {};   // 拖动到面板上方后变成小圆点
+static int g_dotDragId = -1;                 // 正在拖动的小圆点（tab id）
+static bool g_dotShowPending = false;
+static bool g_tabHidePending = false;
 static int g_tabDragFrom = -1;   // 拖拽起点（位置）
 static bool g_captureHotkey = false;   // 设置页正在捕获快捷键
 static int g_searchRows = 0;   // 0 = 自动（按窗口高度算）
@@ -1065,6 +1069,31 @@ static RECT RowRect(int i) {
 }
 
 static RECT TabRect(int i);
+static int VisibleTabs(int* out) {
+    int n = 0;
+    for (int i = 0; i < kTabCount; ++i) { int id = g_tabOrder[i]; if (!g_tabHidden[id]) out[n++] = id; }
+    return n;
+}
+
+static RECT DotRect(int dotIndex) {   // 隐藏页签的小圆点（页签行右侧）
+    RECT p = PanelRect();
+    RECT tr = TabRect(0);
+    int cy = (tr.top + tr.bottom) / 2;
+    int cx = p.right - 18 - dotIndex * 16;
+    RECT r = { cx - 5, cy - 5, cx + 5, cy + 5 };
+    return r;
+}
+
+static int DotAtPoint(POINT pt) {   // 返回 tab id，或 -1
+    int hid[kTabCount], n = 0;
+    for (int i = 0; i < kTabCount; ++i) { int id = g_tabOrder[i]; if (g_tabHidden[id]) hid[n++] = id; }
+    for (int i = 0; i < n; ++i) {
+        RECT r = DotRect(i);
+        if (pt.x >= r.left && pt.x < r.right && pt.y >= r.top && pt.y < r.bottom) return hid[i];
+    }
+    return -1;
+}
+
 static int TabPosFromPoint(POINT pt) {
     for (int i = 0; i < kTabCount; ++i) {
         RECT r = TabRect(i);
@@ -1221,7 +1250,11 @@ static RECT InputRect() {
 
 static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& input) {
     RECT p = PanelRect();
-    FillRound(dc, p, 14, kPanelFill, kPanelBorder);
+    {   // 背景只覆盖搜索区（页签行留空，AE 风格）
+        RECT tr0 = TabRect(0);
+        RECT bg = { p.left, tr0.top - 6, p.right, p.bottom };
+        FillRound(dc, bg, 14, kPanelFill, kPanelBorder);
+    }
 
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
     SetBkMode(dc, TRANSPARENT);
@@ -1683,19 +1716,21 @@ static void DrawSettings(HDC dc) {
 
 
 static void DrawTabs(HDC dc) {
-    for (int i = 0; i < kTabCount; ++i) {
-        RECT r = TabRect(i);
-        bool on = (g_tabOrder[i] == g_tab);
-
+    RECT p = PanelRect();
+    int vis[kTabCount];
+    int n = VisibleTabs(vis);
+    for (int pos = 0; pos < n; ++pos) {
+        int id = vis[pos];
+        RECT r = TabRect(pos);
+        bool on = (id == g_tab);
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(255, 255, 255) : RGB(150, 150, 155));
         HFONT f = MakeFont(16);
         HGDIOBJ of = SelectObject(dc, f);
-        DrawTextW(dc, kTabs[g_tabOrder[i]], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        DrawTextW(dc, kTabs[id], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         SelectObject(dc, of);
         DeleteObject(f);
-
         if (on) {
             RECT u = { r.left + 10, r.bottom - 2, r.right - 10, r.bottom };
             HBRUSH b = CreateSolidBrush(kRowSel);
@@ -1703,7 +1738,25 @@ static void DrawTabs(HDC dc) {
             DeleteObject(b);
         }
     }
+    {   // 隐藏的页签：页签行右侧的小圆点（可拖回页签行恢复）
+        int d = 0;
+        for (int i = 0; i < kTabCount; ++i) {
+            int id = g_tabOrder[i];
+            if (!g_tabHidden[id]) continue;
+            RECT dr = DotRect(d);
+            HBRUSH b = CreateSolidBrush(id == g_tab ? kRowSel : RGB(70, 72, 78));
+            HGDIOBJ ob = SelectObject(dc, b);
+            HGDIOBJ op = SelectObject(dc, GetStockObject(NULL_PEN));
+            Ellipse(dc, dr.left, dr.top, dr.right, dr.bottom);
+            SelectObject(dc, op);
+            SelectObject(dc, ob);
+            DeleteObject(b);
+            ++d;
+        }
+        (void)p;
+    }
 }
+
 static void DrawTopIcons(HDC dc) {
     // 右上角：设置齿轮（小号，中心与 Ctrl 页签行对齐）
     RECT gr = IconRect(0);
@@ -2647,6 +2700,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             POINT tp0 = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
             int pos0 = TabPosFromPoint(tp0);
             if (pos0 >= 0) { g_tabDragFrom = pos0; SetCapture(hwnd); return 0; }
+            int dotId0 = DotAtPoint(tp0);
+            if (dotId0 >= 0) { g_dotDragId = dotId0; SetCapture(hwnd); return 0; }
         }
         {
             int ex = (int)GET_X_LPARAM(lp), ey = (int)GET_Y_LPARAM(lp);
@@ -2686,6 +2741,17 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         break;
     }
     case WM_LBUTTONUP: {
+        if (g_dotDragId >= 0) {   // 圆点拖动结束
+            int id = g_dotDragId;
+            g_dotDragId = -1;
+            if (g_dotShowPending) { g_tabHidden[id] = false; g_tab = id; }
+            g_dotShowPending = false;
+            ReleaseCapture();
+            SaveIni();
+            UpdateResults();
+            InvalidateRect(hwnd, nullptr, TRUE);
+            return 0;
+        }
         if (g_tabDragFrom >= 0) {
             POINT tp1 = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
             int pos1 = TabPosFromPoint(tp1);
