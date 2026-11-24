@@ -1274,7 +1274,7 @@ static void DrawPanel(HDC dc, const std::wstring& title, const std::wstring& inp
     HFONT ft = MakeFont(15);
     HGDIOBJ of = SelectObject(dc, ft);
     SetTextColor(dc, RGB(140, 140, 140));
-    RECT tr = { p.left + 16, p.top + 2, p.right - 16, p.top + 22 };   // 标题在页签左上方（面板外）
+    RECT tr = { p.left + 16, p.top - 18, p.right - 16, p.top + 2 };   // 标题移到小圆点更上方
     DrawTextW(dc, title.c_str(), -1, &tr, DT_LEFT | DT_SINGLELINE);
     SelectObject(dc, of);
     DeleteObject(ft);
@@ -1762,6 +1762,19 @@ static void DrawTabs(HDC dc) {
             HGDIOBJ ob = SelectObject(dc, b);
             HGDIOBJ op = SelectObject(dc, GetStockObject(NULL_PEN));
             Ellipse(dc, dr.left, dr.top, dr.right, dr.bottom);
+            if (id == g_hoverDotId) {   // 悬停立即显示页签名（与高亮同一判定）
+                const wchar_t* nm = kTabs[id];
+                HFONT tf = MakeFont(13);
+                HGDIOBJ to = SelectObject(dc, tf);
+                SIZE szo = {0,0}; GetTextExtentPoint32W(dc, nm, (int)wcslen(nm), &szo);
+                RECT box = { dr.right + 6, dr.top - 6, dr.right + 12 + szo.cx + 8, dr.bottom + 8 };
+                FillRound(dc, box, 5, RGB(46, 46, 52), RGB(96, 98, 106));
+                SetBkMode(dc, TRANSPARENT);
+                SetTextColor(dc, RGB(240, 242, 246));
+                DrawTextW(dc, nm, -1, &box, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                SelectObject(dc, to);
+                DeleteObject(tf);
+            }
             SelectObject(dc, op);
             SelectObject(dc, ob);
             DeleteObject(b);
@@ -2594,6 +2607,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_ACTIVATE:
         return 0;   // 切窗口不再关闭面板，方便观察状态
     case WM_SETCURSOR: {
+        if (g_tabDragFrom >= 0 || g_dotDragId >= 0) { SetCursor(LoadCursor(nullptr, IDC_SIZEWE)); return TRUE; }
         POINT cp; GetCursorPos(&cp); ScreenToClient(hwnd, &cp);
         cp.x -= kPadX; cp.y -= kPadY;
         RECT pc = PanelRect();
