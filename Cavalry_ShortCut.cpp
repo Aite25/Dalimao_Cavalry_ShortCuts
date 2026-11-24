@@ -2236,8 +2236,8 @@ static void ClampPieToWorkArea(HWND hwnd, int margin = 6) {
     if (!hwnd) return;
     RECT work; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
     RECT wr; GetWindowRect(hwnd, &wr);
-    int left   = wr.left + kPadX + 24;
-    int top    = wr.top  + kPadY + 22;
+    int left   = wr.left + kPadX + (CenterX() - (kOffHoriz + kRectW / 2));   // 只算扇区，页签/icon 不参与左边界
+    int top    = wr.top  + kPadY + (CenterY() - (kOffVert + kRectH / 2));    // 只算扇区，页签不参与上边界
     int right  = wr.left + kPadX + (CenterX() + kOffHoriz + kRectW / 2);
     int bottom = wr.top  + kPadY + (CenterY() + kOffVert + kRectH / 2);
     int nx = wr.left, ny = wr.top;
