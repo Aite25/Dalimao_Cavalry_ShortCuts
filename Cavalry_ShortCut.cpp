@@ -2231,12 +2231,34 @@ static void HideHotbox(HWND hwnd) {
     ShowWindow(hwnd, SW_HIDE);
 }
 
+static void ClampPanelToWorkArea(HWND hwnd, int margin = 8) {
+    if (!hwnd) return;
+    RECT work; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+    RECT wr; GetWindowRect(hwnd, &wr);
+    int px = wr.left + kPadX, py = wr.top + kPadY;   // 内容左上角
+    int nx = wr.left, ny = wr.top;
+    if (g_winW + margin * 2 <= work.right - work.left) {
+        if (px < work.left + margin) nx += (work.left + margin) - px;
+        if (px + g_winW > work.right - margin) nx -= (px + g_winW) - (work.right - margin);
+    } else {
+        nx = work.left + (work.right - work.left - g_winW) / 2 - kPadX;   // 屏幕比面板窄：居中
+    }
+    if (g_winH + margin * 2 <= work.bottom - work.top) {
+        if (py < work.top + margin) ny += (work.top + margin) - py;
+        if (py + g_winH > work.bottom - margin) ny -= (py + g_winH) - (work.bottom - margin);
+    } else {
+        ny = work.top + (work.bottom - work.top - g_winH) / 2 - kPadY;
+    }
+    if (nx != wr.left || ny != wr.top) SetWindowPos(hwnd, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+}
+
 static int g_savedWinW = 0;
 static void EnterSettingsMode(HWND hwnd) {
     if (g_savedWinW == 0) { g_savedWinW = g_winW; g_winW = 900; }
     RECT wr; GetWindowRect(hwnd, &wr);
     SetWindowPos(hwnd, HWND_TOP, wr.left, wr.top, g_winW + kPadX * 2, g_winH + kPadY * 2, SWP_NOMOVE | SWP_NOZORDER);
     g_mode = M_SETTINGS;
+    ClampPanelToWorkArea(hwnd);   // 设置页更宽，同样做边缘保护
     SyncEditFromMode();
     InvalidateRect(hwnd, nullptr, TRUE);
 }
@@ -2309,17 +2331,7 @@ static void EnterSearch(wchar_t firstChar = 0) {
     g_sel = 0;
     g_scroll = 0;
     g_selAll = false;
-    if (g_main) {   // 搜索面板需要完整可见：把界面拉回工作区
-        RECT work; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
-        RECT wr; GetWindowRect(g_main, &wr);
-        int nx = wr.left, ny = wr.top;
-        int px = nx + kPadX, py = ny + kPadY;
-        if (px < work.left) nx += work.left - px;
-        if (py < work.top) ny += work.top - py;
-        if (px + g_winW > work.right) nx -= (px + g_winW - work.right);
-        if (py + g_winH > work.bottom) ny -= (py + g_winH - work.bottom);
-        if (nx != wr.left || ny != wr.top) SetWindowPos(g_main, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-    }
+    if (g_main) ClampPanelToWorkArea(g_main);   // 边缘保护：搜索面板完整可见
     SyncEditText();
     UpdateResults();
     SyncEditFromMode();
@@ -2637,7 +2649,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
         }
-        if (g_resizing) { g_resizing = false; ReleaseCapture(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+        if (g_resizing) {
+            g_resizing = false; ReleaseCapture();
+            ClampPanelToWorkArea(hwnd);
+            if (g_mode == M_SEARCH || g_mode == M_SETTINGS) SyncEditFromMode();
+            InvalidateRect(hwnd, nullptr, TRUE);
+            return 0;
+        }
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
 
         // 页签点击（圆盘模式）
