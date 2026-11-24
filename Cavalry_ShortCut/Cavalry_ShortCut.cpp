@@ -1357,7 +1357,7 @@ static void DrawResults(HDC dc) {
         RECT ibox = { r.left + 30, (r.top + r.bottom) / 2 - 8, r.left + 46, (r.top + r.bottom) / 2 + 8 };
         if (g_results[i].kind == L"layer") DrawIcon(dc, g_results[i].value, ibox);
         RECT tr = r; tr.left += 52; tr.right -= 90;
-        if (row < 6) {   // 只给当前可见的前 6 行编号
+        {   // 所有行都编号（1..n）；Ctrl+1~6 数字快捷键仍只到 6
             SetTextColor(dc, hov ? RGB(225, 232, 245) : (sel ? RGB(200, 200, 210) : RGB(120, 120, 128)));
             RECT nr = r; nr.left += 8; nr.right = nr.left + 22;
             std::wstring num = std::to_wstring(row + 1);
@@ -2217,6 +2217,8 @@ static void ForceForeground(HWND hwnd) {
 }
 
 static void HideHotbox(HWND hwnd) {
+    if (g_editHost) ShowWindow(g_editHost, SW_HIDE);   // 先收输入框小窗
+    if (g_scrollbar) ShowWindow(g_scrollbar, SW_HIDE);
     // 先把界面复位成圆盘并画好，再隐藏：这样下次显示的第一帧就是圆盘，不会闪搜索面板
     g_mode = M_PIE;
     g_hover = -1;
@@ -2229,12 +2231,69 @@ static void HideHotbox(HWND hwnd) {
     ShowWindow(hwnd, SW_HIDE);
 }
 
+// 只夹"圆盘实际可见的区域"（页签 + 8 扇区 + 中心），不把下方大片透明区算进去
+static bool GetWorkAreaForWindow(HWND hwnd, RECT& out);
+static void ClampPieToWorkArea(HWND hwnd, int margin = 6) {
+    if (!hwnd) return;
+    RECT work; GetWorkAreaForWindow(hwnd, work);   // 多显示器：取窗口所在屏幕的工作区
+    RECT wr; GetWindowRect(hwnd, &wr);
+    int left   = wr.left + kPadX + (CenterX() - (kOffHoriz + kRectW / 2));   // 只算扇区，页签/icon 不参与左边界
+    int top    = wr.top  + kPadY + (CenterY() - (kOffVert + kRectH / 2));    // 只算扇区，页签不参与上边界
+    int right  = wr.left + kPadX + (CenterX() + kOffHoriz + kRectW / 2);
+    int bottom = wr.top  + kPadY + (CenterY() + kOffVert + kRectH / 2);
+    int nx = wr.left, ny = wr.top;
+    if (right - left + margin * 2 <= work.right - work.left) {
+        if (left < work.left + margin) nx += (work.left + margin) - left;
+        if (right > work.right - margin) nx -= right - (work.right - margin);   // 右侧保护（按所在显示器工作区）
+    }
+    if (bottom - top + margin * 2 <= work.bottom - work.top) {
+        if (top < work.top + margin) ny += (work.top + margin) - top;
+        if (bottom > work.bottom - margin) ny -= bottom - (work.bottom - margin);
+    }
+    if (nx != wr.left || ny != wr.top) SetWindowPos(hwnd, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+}
+
+static bool GetWorkAreaForWindow(HWND hwnd, RECT& out) {
+    HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi = { sizeof(MONITORINFO) };
+    if (mon && GetMonitorInfoW(mon, &mi)) { out = mi.rcWork; return true; }
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &out, 0);
+    return false;
+}
+
+static void ClampPanelToWorkArea(HWND hwnd, int margin = 2) {
+    if (!hwnd) return;
+    RECT work; GetWorkAreaForWindow(hwnd, work);   // 多显示器：取窗口所在屏幕的工作区
+    RECT wr; GetWindowRect(hwnd, &wr);
+    RECT pr = PanelRect();                       // 面板本体的边界（不是整块内容区）
+    int left   = wr.left + kPadX + pr.left;
+    int top    = wr.top  + kPadY + pr.top;
+    int right  = wr.left + kPadX + pr.right;
+    int bottom = wr.top  + kPadY + pr.bottom;
+    int nx = wr.left, ny = wr.top;
+    if (right - left + margin * 2 <= work.right - work.left) {
+        if (left < work.left + margin) nx += (work.left + margin) - left;
+        if (right > work.right - margin) nx -= right - (work.right - margin);   // 右侧保护（按所在显示器工作区）
+        if (right > work.right - margin) nx -= right - (work.right - margin);
+    } else {
+        nx = work.left + (work.right - work.left - (right - left)) / 2 - kPadX - pr.left;
+    }
+    if (bottom - top + margin * 2 <= work.bottom - work.top) {
+        if (top < work.top + margin) ny += (work.top + margin) - top;
+        if (bottom > work.bottom - margin) ny -= bottom - (work.bottom - margin);
+    } else {
+        ny = work.top + (work.bottom - work.top - (bottom - top)) / 2 - kPadY - pr.top;
+    }
+    if (nx != wr.left || ny != wr.top) SetWindowPos(hwnd, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+}
+
 static int g_savedWinW = 0;
 static void EnterSettingsMode(HWND hwnd) {
     if (g_savedWinW == 0) { g_savedWinW = g_winW; g_winW = 900; }
     RECT wr; GetWindowRect(hwnd, &wr);
     SetWindowPos(hwnd, HWND_TOP, wr.left, wr.top, g_winW + kPadX * 2, g_winH + kPadY * 2, SWP_NOMOVE | SWP_NOZORDER);
     g_mode = M_SETTINGS;
+    ClampPanelToWorkArea(hwnd);   // 设置页更宽，同样做边缘保护
     SyncEditFromMode();
     InvalidateRect(hwnd, nullptr, TRUE);
 }
@@ -2286,6 +2345,7 @@ static void ShowAtCursor(HWND hwnd) {
     UpdateWindow(hwnd);   // 先按"圆盘"画好，再显示
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, winW, winH, cavFrontAtShow ? SWP_SHOWWINDOW : (SWP_SHOWWINDOW | SWP_NOACTIVATE));
     SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, winW, winH, 0);
+    ClampPieToWorkArea(hwnd, 6);   // 边缘保护：只保证圆盘本体（页签+扇区）在屏幕内
     InvalidateRect(hwnd, nullptr, TRUE);
     UpdateWindow(hwnd);   // 显示后立刻补画一帧，抵消首帧残影
     ShowCatcher(false);   // 不再铺捕获层：不影响其它应用
@@ -2307,17 +2367,7 @@ static void EnterSearch(wchar_t firstChar = 0) {
     g_sel = 0;
     g_scroll = 0;
     g_selAll = false;
-    if (g_main) {   // 搜索面板需要完整可见：把界面拉回工作区
-        RECT work; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
-        RECT wr; GetWindowRect(g_main, &wr);
-        int nx = wr.left, ny = wr.top;
-        int px = nx + kPadX, py = ny + kPadY;
-        if (px < work.left) nx += work.left - px;
-        if (py < work.top) ny += work.top - py;
-        if (px + g_winW > work.right) nx -= (px + g_winW - work.right);
-        if (py + g_winH > work.bottom) ny -= (py + g_winH - work.bottom);
-        if (nx != wr.left || ny != wr.top) SetWindowPos(g_main, HWND_TOP, nx, ny, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-    }
+    if (g_main) ClampPanelToWorkArea(g_main);   // 边缘保护：搜索面板完整可见
     SyncEditText();
     UpdateResults();
     SyncEditFromMode();
@@ -2376,6 +2426,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     switch (msg) {
     case WM_TIMER:
+        if (g_editHost && !IsWindowVisible(g_main) && IsWindowVisible(g_editHost)) ShowWindow(g_editHost, SW_HIDE);
         {   // 仅当 Cavalry 或热盒自己在前台时才占用热键
             HWND fg = GetForegroundWindow();
             bool want = IsCavalryWindow(fg) || fg == hwnd || (g_main && fg == g_main) || (g_edit && fg == g_edit);
@@ -2397,6 +2448,18 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             WIN32_FILE_ATTRIBUTE_DATA fad = {};
             bool cavThere = AnyCavalryVisible();
+            static bool trigInit = false;
+            static DWORD startTick = GetTickCount();
+            if (GetTickCount() - startTick < 2000) {   // 启动后 2 秒内的旧触发一律忽略
+                if (trig[0] && GetFileAttributesExW(trig, GetFileExInfoStandard, &fad)) lastTrig = fad.ftLastWriteTime;
+                return 0;
+            }
+            if (!trigInit) {   // 首次轮询：只记录旧触发文件的时间，不呼出（避免开着 Cavalry 启动时弹一次）
+                WIN32_FILE_ATTRIBUTE_DATA old = {};
+                if (trig[0] && GetFileAttributesExW(trig, GetFileExInfoStandard, &old)) lastTrig = old.ftLastWriteTime;
+                trigInit = true;
+                return 0;
+            }
             bool trigHit = cavThere && trig[0] && GetFileAttributesExW(trig, GetFileExInfoStandard, &fad) && CompareFileTime(&fad.ftLastWriteTime, &lastTrig) != 0;
             if (trigHit) {
                 { HWND fgx = GetForegroundWindow(); Log(std::string("trigger hit, fg=") + DescribeWindow(fgx) + " cavFront=" + ((IsCavalryWindow(fgx) || IsWindowVisible(hwnd)) ? "1" : "0")); }
@@ -2634,7 +2697,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
         }
-        if (g_resizing) { g_resizing = false; ReleaseCapture(); InvalidateRect(hwnd, nullptr, TRUE); return 0; }
+        if (g_resizing) {
+            g_resizing = false; ReleaseCapture();
+            ClampPanelToWorkArea(hwnd);
+            if (g_mode == M_SEARCH || g_mode == M_SETTINGS) SyncEditFromMode();
+            InvalidateRect(hwnd, nullptr, TRUE);
+            return 0;
+        }
         POINT p = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
 
         // 页签点击（圆盘模式）
@@ -2935,7 +3004,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (g_mode == M_SETTINGS) { ExitSettingsMode(hwnd); HideHotbox(hwnd); return 0; }
             if (g_binding) { g_binding = false; ShowWindow(hwnd, SW_HIDE); return 0; }
             if (g_mode == M_SEARCH && g_bindSlot >= 0) { g_mode = M_SETTINGS; g_bindSlot = -1; }
-            else if (g_mode != M_PIE) { g_mode = M_PIE; }
+            else if (g_mode != M_PIE) { HideHotbox(hwnd); return 0; }   // 搜索/设置页按 Esc 直接关闭
             else { HideHotbox(hwnd); }
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
