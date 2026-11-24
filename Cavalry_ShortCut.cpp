@@ -2437,6 +2437,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             WIN32_FILE_ATTRIBUTE_DATA fad = {};
             bool cavThere = AnyCavalryVisible();
+            static bool trigInit = false;
+            if (!trigInit) {   // 首次轮询：只记录旧触发文件的时间，不呼出（避免开着 Cavalry 启动时弹一次）
+                WIN32_FILE_ATTRIBUTE_DATA old = {};
+                if (trig[0] && GetFileAttributesExW(trig, GetFileExInfoStandard, &old)) lastTrig = old.ftLastWriteTime;
+                trigInit = true;
+                return 0;
+            }
             bool trigHit = cavThere && trig[0] && GetFileAttributesExW(trig, GetFileExInfoStandard, &fad) && CompareFileTime(&fad.ftLastWriteTime, &lastTrig) != 0;
             if (trigHit) {
                 { HWND fgx = GetForegroundWindow(); Log(std::string("trigger hit, fg=") + DescribeWindow(fgx) + " cavFront=" + ((IsCavalryWindow(fgx) || IsWindowVisible(hwnd)) ? "1" : "0")); }
