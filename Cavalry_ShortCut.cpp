@@ -1149,16 +1149,16 @@ static void ComputeTabLayout() {
     RECT p = PanelRect();
     int right = (g_mode == M_SEARCH) ? (IconRect(0).left - 4) : (p.right - 16);
     int vis[kTabCount]; int n = VisibleTabs(vis);
+    g_tabCap = n;                                  // 不折叠：页签可以只露出一部分
     int avail = right - (p.left + 16);
-    int cap0 = avail / 52; if (cap0 < 1) cap0 = 1;
-    int cap = cap0;
-    if (n > cap0) { cap = (avail - 40) / 52; if (cap < 1) cap = 1; }   // 只在溢出时给两个箭头让位
-    g_tabCap = cap;
-    int cur = 0; for (int i = 0; i < n; ++i) if (vis[i] == g_tab) cur = i;
-    if (g_tabScroll > n - cap) g_tabScroll = n - cap;
-    if (g_tabScroll < 0) g_tabScroll = 0;
-    if (cur < g_tabScroll) g_tabScroll = cur;
-    if (cur >= g_tabScroll + cap) g_tabScroll = cur - cap + 1;
+    if (n * 52 <= avail) { g_tabScroll = 0; }
+    else {
+        int cur = 0; for (int i = 0; i < n; ++i) if (vis[i] == g_tab) cur = i;
+        if (g_tabScroll > n - 1) g_tabScroll = n - 1;
+        if (g_tabScroll < 0) g_tabScroll = 0;
+        if (cur < g_tabScroll) g_tabScroll = cur;
+        while (g_tabScroll < cur && (cur - g_tabScroll + 1) * 52 > avail) ++g_tabScroll;
+    }
     int ax = p.left + 16;
     g_arrowL = { ax - 2, p.top + 24, ax + 18, p.top + 46 };
     g_arrowR = { right - 18, p.top + 24, right, p.top + 46 };
@@ -1757,11 +1757,15 @@ static void DrawSettings(HDC dc) {
 
 
 static void DrawTabs(HDC dc) {
+    RECT pClip = PanelRect();
+    int clipRight = (g_mode == M_SEARCH) ? (IconRect(0).left - 4) : (pClip.right - 16);
+    int dcSaved2 = SaveDC(dc);
+    IntersectClipRect(dc, pClip.left + 16, pClip.top + 20, clipRight, pClip.top + 48);
     RECT p = PanelRect();
     int vis[kTabCount];
     int n = VisibleTabs(vis);
     ComputeTabLayout();
-    int posFrom = g_tabScroll, posTo = g_tabScroll + g_tabCap; if (posTo > n) posTo = n;
+    int posFrom = 0, posTo = n;   // 全部画，靠裁剪处理露一半
     for (int pos = posFrom; pos < posTo; ++pos) {
         int id = vis[pos];
         RECT r = TabRect(pos);
@@ -1811,6 +1815,7 @@ static void DrawTabs(HDC dc) {
         }
         (void)p;
     }
+    RestoreDC(dc, dcSaved2);
     {   // 溢出：左右翻页
         int visA[kTabCount]; int nA = VisibleTabs(visA);
         if (nA > g_tabCap) {
