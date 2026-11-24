@@ -2737,26 +2737,22 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             if (g_dotDragId >= 0) {
                 g_dotShowPending = (dp.y >= tr0.top - 6 && dp.y <= tr0.bottom + 6);
-                if (!g_dotShowPending) {
-                    int target = DotAtPoint(dp);
-                {
-                    RECT t0i = TabRect(0);
+                {   // 插入位置：按光标 x 与各可见页签中心比较（任何位置都更新，用于竖条提示）
                     int visIds2[kTabCount]; int vn2 = VisibleTabs(visIds2);
-                    g_dotInsertPos = 0;
-                    for (int q = 0; q < vn2; ++q) { RECT tq = TabRect(q); if (dp.x > (tq.left + tq.right) / 2) g_dotInsertPos = q + 1; }
+                    int newPos = 0;
+                    for (int q = 0; q < vn2; ++q) { RECT tq = TabRect(q); if (dp.x > (tq.left + tq.right) / 2) newPos = q + 1; }
+                    if (newPos != g_dotInsertPos) { g_dotInsertPos = newPos; InvalidateRect(hwnd, nullptr, TRUE); }
                 }
-                    if (target >= 0 && target != g_dotDragId) {
-                        int from = -1, to = -1;
-                        for (int q = 0; q < kTabCount; ++q) { if (g_tabOrder[q] == g_dotDragId) from = q; if (g_tabOrder[q] == target) to = q; }
-                        if (from >= 0 && to >= 0 && from != to) {   // 把拖动中的圆点移动到目标位置（插入式）
-                            int moved = g_tabOrder[from];
-                            if (from < to) { for (int q = from; q < to; ++q) g_tabOrder[q] = g_tabOrder[q + 1]; }
-                            else { for (int q = from; q > to; --q) g_tabOrder[q] = g_tabOrder[q - 1]; }
-                            g_tabOrder[to] = moved;
-                            InvalidateRect(hwnd, nullptr, TRUE);
-                        }
-                        int ia = -1, ib = -1;
-                        if (ia >= 0 && ib >= 0) { std::swap(g_tabOrder[ia], g_tabOrder[ib]); InvalidateRect(hwnd, nullptr, TRUE); }
+                int target = DotAtPoint(dp);
+                if (!g_dotShowPending && target >= 0 && target != g_dotDragId) {
+                    int from = -1, to = -1;
+                    for (int q = 0; q < kTabCount; ++q) { if (g_tabOrder[q] == g_dotDragId) from = q; if (g_tabOrder[q] == target) to = q; }
+                    if (from >= 0 && to >= 0 && from != to) {
+                        int moved = g_tabOrder[from];
+                        if (from < to) { for (int q = from; q < to; ++q) g_tabOrder[q] = g_tabOrder[q + 1]; }
+                        else { for (int q = from; q > to; --q) g_tabOrder[q] = g_tabOrder[q - 1]; }
+                        g_tabOrder[to] = moved;
+                        InvalidateRect(hwnd, nullptr, TRUE);
                     }
                 }
                 return 0;
