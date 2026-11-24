@@ -240,7 +240,7 @@ static void LoadActive();
 
 // ---------------------------------------------------------------- 顶部页签（热盒 1-4 / 修饰键）
 static RECT TabBoxRect(int i) {   // 第一行：1..4
-    int cx = CenterX(), cy = CenterY();   // 相对圆盘中心定位，面板尺寸变化时保持不动
+    int cx = g_winW / 2, cy = g_winH / 2;   // 相对圆盘中心定位，面板尺寸变化时保持不动
     RECT r;
     r.left = cx - 296 + i * 58;
     r.top = cy - 256;
@@ -250,7 +250,7 @@ static RECT TabBoxRect(int i) {   // 第一行：1..4
 }
 
 static RECT TabModRect(int i) {   // 第二行：无 / Ctrl / Shift / Alt
-    int cx2 = CenterX(), cy2 = CenterY();
+    int cx2 = g_winW / 2, cy2 = g_winH / 2;
     RECT r;
     r.left = cx2 - 296 + i * 58;
     r.top = cy2 - 226;
