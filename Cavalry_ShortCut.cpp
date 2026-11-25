@@ -1130,7 +1130,7 @@ static RECT TabRect(int i) {   // i = 可见页签序号；溢出时按 g_tabScr
     RECT p = PanelRect();
     RECT r;
     r.left = p.left + 16 + (i - g_tabScroll) * 52;
-    r.right = r.left + 48;
+    r.right = r.left + 52;   // 与间距一致：无间隙
     r.top = p.top + 24;
     r.bottom = r.top + 22;
     return r;
@@ -1153,7 +1153,7 @@ static void ComputeTabLayout() {
     g_tabCap = n;                                  // 不折叠：页签可以只露出一部分
     int avail = right - (p.left + 16);
     if (n * 52 <= avail) g_tabScrollMax = 0;
-    else { int fit = (avail - 48) / 52; if (fit < 0) fit = 0; g_tabScrollMax = n - 1 - fit; if (g_tabScrollMax < 0) g_tabScrollMax = 0; }
+    else { int fit = (avail - 52) / 52; if (fit < 0) fit = 0; g_tabScrollMax = n - 1 - fit; if (g_tabScrollMax < 0) g_tabScrollMax = 0; }
     if (n * 52 <= avail) { g_tabScroll = 0; }
     else {
         int cur = 0; for (int i = 0; i < n; ++i) if (vis[i] == g_tab) cur = i;
@@ -1773,7 +1773,7 @@ static void DrawTabs(HDC dc) {
         int id = vis[pos];
         RECT r = TabRect(pos);
         bool on = (id == g_tab);
-        FillRound(dc, r, 6, on ? RGB(52, 54, 60) : RGB(34, 34, 38), on ? RGB(66, 68, 76) : RGB(44, 44, 50));
+        { HBRUSH tb = CreateSolidBrush(on ? RGB(52, 54, 60) : RGB(34, 34, 38)); FillRect(dc, &r, tb); DeleteObject(tb); }
         SetMapMode(dc, MM_TEXT); SetViewportOrgEx(dc, 0, 0, nullptr); SetWindowOrgEx(dc, 0, 0, nullptr); SetTextAlign(dc, TA_LEFT | TA_TOP);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, on ? RGB(255, 255, 255) : RGB(150, 150, 155));
