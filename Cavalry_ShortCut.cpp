@@ -1,4 +1,4 @@
-// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
+﻿// Cavalry_ShortCut.cpp — Cavalry 径向热盒 v6
 //
 // 参考 AE 插件 DalimaoShortcuts 的热盒：
 //   · 径向 8 扇区（N/NE/E/SE/S/SW/W/NW）+ 中心圆
@@ -2549,6 +2549,11 @@ static void ToggleWindow(HWND hwnd) {
 }
 
 static void EnterSearch(wchar_t firstChar = 0) {
+    {   // 每次进入搜索：回到第一个可见页签
+        int vis0[kTabCount]; int n0 = VisibleTabs(vis0);
+        if (n0 > 0) g_tab = vis0[0];
+        g_tabScroll = 0;
+    }
     if (g_winW != g_panelW || g_winH != g_panelH) {
         g_winW = g_panelW; g_winH = g_panelH;
         SetWindowPos(g_main, HWND_TOP, 0, 0, g_winW + kPadX * 2, g_winH + kPadY * 2, SWP_NOMOVE | SWP_NOZORDER);
